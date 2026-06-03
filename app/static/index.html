@@ -29,21 +29,21 @@
       <section class="hero" id="lookup">
         <div class="hero-inner">
           <p class="hero-mini">Omgekeerd nummer zoeken</p>
-          <h2>Who called me?</h2>
+          <h2>Wie belde mij?</h2>
           <p class="hero-copy">
-            Zoek direct naar publieke profielnamen, gebruikersnamen, organisaties en platformverwijzingen
-            op basis van een telefoonnummer.
+            Zoek in een keer naar publieke profielnamen, gebruikersnamen, organisaties en
+            platformvermeldingen die aan een telefoonnummer te koppelen zijn.
           </p>
 
           <form id="singleForm" class="hero-search" autocomplete="off">
             <input id="singlePhone" placeholder="bijv. 06 12 34 56 78" required />
-            <button type="submit" aria-label="Zoeken">Search</button>
+            <button type="submit" aria-label="Zoeken">Zoek nummer</button>
           </form>
 
           <div class="hero-meta">
             <span class="hero-chip" id="globalStatus" data-tone="idle">Systeem standby</span>
-            <span class="hero-chip">4 bronnen</span>
-            <span class="hero-chip">Live + cached</span>
+            <span class="hero-chip">4 databronnen</span>
+            <span class="hero-chip">Live + cache</span>
           </div>
 
           <div class="runtime-hint" id="runtimeHint"></div>
@@ -51,7 +51,7 @@
       </section>
 
       <section class="strap">
-        <p>Check onbekende bellers, vind publieke matches en bekijk platformsporen vanuit een zoeklaag.</p>
+        <p>Onderzoek onbekende bellers, vind publieke sporen en bekijk mogelijke profielen in één zoekslag.</p>
       </section>
 
       <section class="content-grid">
@@ -65,14 +65,14 @@
           </div>
 
           <div id="singleResult" class="summary-box muted-empty">
-            Status idle
-            <span class="soft-row">Nog geen actieve lookup.</span>
+            Status standby
+            <span class="soft-row">Nog geen zoekopdracht uitgevoerd.</span>
           </div>
 
           <div class="result-toolbar">
-            <span class="toolbar-pill" id="kpiMatches">0 matches</span>
-            <span class="toolbar-pill" id="kpiHigh">0 high confidence</span>
-            <span class="toolbar-pill" id="resultStamp">waiting...</span>
+            <span class="toolbar-pill" id="kpiMatches">0 treffers</span>
+            <span class="toolbar-pill" id="kpiHigh">0 sterke matches</span>
+            <span class="toolbar-pill" id="resultStamp">klaar voor zoeken</span>
           </div>
 
           <div id="singleResultLayer" class="result-layer muted-empty">
@@ -93,23 +93,23 @@
               <textarea id="bulkPhones" rows="8" placeholder="06 12 34 56 78&#10;0031 6 11 22 33 44"></textarea>
               <div class="bulk-actions">
                 <label class="toggle"><input type="checkbox" id="bulkAsync" checked /> Asynchroon</label>
-                <button type="submit">Start batch</button>
+                <button type="submit">Start zoekbatch</button>
               </div>
             </form>
 
-            <div id="bulkResult" class="summary-box muted-empty">Nog geen batch actief.</div>
+            <div id="bulkResult" class="summary-box muted-empty">Nog geen batchzoekopdracht actief.</div>
             <div class="progress-wrap">
               <div class="progress-track">
                 <span id="bulkProgressBar" class="progress-fill" style="width: 0%"></span>
               </div>
               <p id="bulkProgressText">0 / 0</p>
             </div>
-            <div id="jobStatus" class="summary-box muted-empty">Geen actieve queue.</div>
+            <div id="jobStatus" class="summary-box muted-empty">Geen actieve wachtrij.</div>
           </article>
 
           <article class="panel info-panel">
-            <p class="panel-kicker">Live Sources</p>
-            <h3>Search Footprint</h3>
+            <p class="panel-kicker">Actieve bronnen</p>
+            <h3>Zoekbereik</h3>
             <ul class="source-list">
               <li><span>DuckDuckGo</span><strong>publieke zoeklaag</strong></li>
               <li><span>SerpAPI</span><strong>json-bron</strong></li>

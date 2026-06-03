@@ -55,7 +55,7 @@ function updateCounts(results) {
   const matchCount = results.length;
   const highConfidenceCount = results.filter((item) => Number(item.confidence || 0) >= 0.75).length;
   kpiMatches.textContent = `${matchCount} treffers`;
-  kpiHigh.textContent = `${highConfidenceCount} hoge score`;
+  kpiHigh.textContent = `${highConfidenceCount} sterke matches`;
 }
 
 function renderSummary(text, target) {
@@ -72,7 +72,7 @@ function renderMatches(results, stamp) {
   if (!results.length) {
     updateCounts([]);
     resultStamp.textContent = stamp;
-    renderEmptyResults("Geen publieke matches gevonden.");
+    renderEmptyResults("Geen publieke vermeldingen gevonden voor dit nummer.");
     return;
   }
 
@@ -105,7 +105,7 @@ function renderMatches(results, stamp) {
             <strong>Gebruikersnaam</strong><span>${handle}</span>
             <strong>Organisatie</strong><span>${organization}</span>
             <strong>Locatie</strong><span>${location}</span>
-            <strong>Bronlink</strong><span>${url}</span>
+            <strong>Profiel- of bronlink</strong><span>${url}</span>
             <strong>Bewijs</strong><span>${evidence}</span>
           </div>
         </article>
@@ -120,17 +120,17 @@ function renderMatches(results, stamp) {
 }
 
 function resetSingleView() {
-  renderSummary("Status standby\nNog geen actieve lookup.", singleResult);
+  renderSummary("Status standby\nNog geen zoekopdracht uitgevoerd.", singleResult);
   renderEmptyResults("Geen resultaten geladen.");
   kpiMatches.textContent = "0 treffers";
-  kpiHigh.textContent = "0 hoge score";
-  resultStamp.textContent = "wachten...";
+  kpiHigh.textContent = "0 sterke matches";
+  resultStamp.textContent = "klaar voor zoeken";
 }
 
 async function runSingleLookup(phoneNumber) {
   setStatus("Zoeken", "busy");
-  renderSummary("Lookup gestart...\nBezig met zoeken naar publieke signalen.", singleResult);
-  renderEmptyResults("Matches laden...");
+  renderSummary("Zoekopdracht gestart...\nBel Radar zoekt nu naar publieke signalen.", singleResult);
+  renderEmptyResults("Resultaten worden geladen...");
 
   const response = await fetch("/api/v1/lookup", {
     method: "POST",
@@ -142,7 +142,7 @@ async function runSingleLookup(phoneNumber) {
   if (!response.ok) {
     setStatus("Zoeken mislukt", "err");
     renderSummary(`Fout: ${payload.detail || "onbekend"}`, singleResult);
-    renderEmptyResults("Lookup mislukt.");
+    renderEmptyResults("De zoekopdracht kon niet worden voltooid.");
     return;
   }
 
@@ -151,11 +151,11 @@ async function runSingleLookup(phoneNumber) {
       `Status: ${payload.status}`,
       `Request ID: ${payload.request_id}`,
       `E164: ${payload.phone_e164}`,
-      `Resultaten: ${payload.results.length}`,
+      `Gevonden treffers: ${payload.results.length}`,
     ].join("\n"),
     singleResult,
   );
-  renderMatches(payload.results || [], `lookup ${payload.phone_e164}`);
+  renderMatches(payload.results || [], `laatste scan · ${payload.phone_e164}`);
   setStatus("Zoeken klaar", "ok");
 }
 
@@ -176,7 +176,7 @@ async function pollJob(jobId) {
     [
       `Status: ${payload.status}`,
       `Voortgang: ${payload.processed_items}/${payload.total_items} (${payload.percent}%)`,
-      `Error: ${payload.error || "-"}`,
+      `Foutmelding: ${payload.error || "-"}`,
       "",
       ...payload.items.map((item) => `${item.row_index}. ${item.phone_raw} -> ${item.status}`),
     ].join("\n"),
@@ -209,8 +209,8 @@ singleForm.addEventListener("submit", async (event) => {
 
   if (!apiEnabled) {
     setStatus("Previewmodus", "busy");
-    renderSummary("Design preview actief.\nOpen http://127.0.0.1:8000 voor live lookup.", singleResult);
-    renderEmptyResults("Live API is niet beschikbaar in file preview.");
+    renderSummary("Ontwerpvoorbeeld actief.\nOpen http://127.0.0.1:8000 voor live zoeken.", singleResult);
+    renderEmptyResults("De live API is niet beschikbaar in bestandsvoorbeeld.");
     return;
   }
 
@@ -234,15 +234,15 @@ bulkForm.addEventListener("submit", async (event) => {
 
   if (!apiEnabled) {
     setStatus("Previewmodus", "busy");
-    renderSummary("Bulk preview actief.\nOpen http://127.0.0.1:8000 voor echte jobs.", bulkResult);
+    renderSummary("Bulkvoorbeeld actief.\nOpen http://127.0.0.1:8000 voor echte batchtaken.", bulkResult);
     return;
   }
 
   setStatus("Batch gestart", "busy");
   bulkProgressBar.style.width = "0%";
   bulkProgressText.textContent = "0 / 0";
-  renderSummary("Batch wordt gestart...", bulkResult);
-  renderSummary("Geen actieve queue.", jobStatus);
+  renderSummary("Zoekbatch wordt gestart...", bulkResult);
+  renderSummary("Geen actieve wachtrij.", jobStatus);
 
   const response = await fetch("/api/v1/lookup/bulk", {
     method: "POST",
@@ -258,7 +258,7 @@ bulkForm.addEventListener("submit", async (event) => {
   }
 
   if (payload.job_id) {
-    renderSummary(`Async job gestart: ${payload.job_id}`, bulkResult);
+    renderSummary(`Asynchrone batch gestart: ${payload.job_id}`, bulkResult);
     pollJob(payload.job_id);
     return;
   }
@@ -266,14 +266,14 @@ bulkForm.addEventListener("submit", async (event) => {
   bulkProgressBar.style.width = "100%";
   bulkProgressText.textContent = `${payload.request_count} / ${payload.request_count}`;
   setStatus("Batch klaar", "ok");
-  renderSummary(`Sync batch voltooid: ${payload.request_count} items`, bulkResult);
+  renderSummary(`Synchrone batch voltooid: ${payload.request_count} nummers`, bulkResult);
 });
 
 if (!apiEnabled) {
-  runtimeHint.textContent = "Preview mode via file://. Voor live zoekopdrachten open de lokale server op http://127.0.0.1:8000.";
+  runtimeHint.textContent = "Voorbeeldmodus via file://. Open http://127.0.0.1:8000 voor live zoekopdrachten.";
   setStatus("Previewmodus", "busy");
 } else {
-  runtimeHint.textContent = "Live mode actief. Resultaten worden direct uit de API en publieke bronnen geladen.";
+  runtimeHint.textContent = "Live modus actief. Resultaten worden direct uit de API en publieke bronnen geladen.";
 }
 
 resetSingleView();
