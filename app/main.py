@@ -81,10 +81,10 @@ def root() -> FileResponse:
 @app.get("/api/v1/sources")
 def sources() -> list[dict[str, str]]:
     return [
-        {"key": "phonenumbers_metadata", "name": "Telefoon metadata", "status": "gratis"},
-        {"key": "numverify", "name": "Numverify API", "status": "key vereist"},
-        {"key": "serpapi", "name": "SerpAPI", "status": "key vereist"},
-        {"key": "duckduckgo_search", "name": "DuckDuckGo Search", "status": "open internet"},
+        {"key": "phonenumbers_metadata", "name": "Telefoonmetadata", "status": "gratis"},
+        {"key": "numverify", "name": "Numverify API", "status": "API-sleutel vereist"},
+        {"key": "serpapi", "name": "SerpAPI", "status": "API-sleutel vereist"},
+        {"key": "duckduckgo_search", "name": "DuckDuckGo zoekresultaten", "status": "publiek internet"},
     ]
 
 
@@ -122,7 +122,7 @@ async def lookup(phone_input: LookupRequestInput, db: Session = Depends(get_db))
         request.error = str(exc)
         request.updated_at = datetime.now(timezone.utc)
         db.commit()
-        raise HTTPException(status_code=500, detail="Lookup fout")
+        raise HTTPException(status_code=500, detail="Zoekfout")
 
     return LookupResponse(
         request_id=request.id,
