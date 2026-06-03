@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import Base, engine, get_db
-from app.models import LookupJob, LookupJobItem, LookupRequest, LookupResult
+from app.models import LookupJob, LookupJobItem, LookupRequest, LookupResult, SourceRuntimeMetric
 from app.schemas import (
     BulkLookupRequest,
     BulkLookupJobResponse,
@@ -28,6 +28,13 @@ from app.schemas import (
 )
 from app.services.normalizer import normalize_phone
 from app.services.orchestrator import create_lookup_request, run_lookup_with_store
+
+
+def _normalize_name_for_metrics(value: str | None) -> str:
+    if not value:
+        return ""
+    safe = "".join(ch.lower() if ch.isalnum() or ch == " " else " " for ch in value).strip()
+    return " ".join(safe.split())
 
 
 app = FastAPI(title=settings.APP_NAME)
@@ -58,6 +65,9 @@ def health() -> dict[str, str]:
 
 def _to_result_out(row: LookupResult) -> LookupResultOut:
     details = row.details or {}
+    supporting_sources = details.get("supporting_sources")
+    if not isinstance(supporting_sources, list):
+        supporting_sources = []
     return LookupResultOut(
         source=row.source,
         platform=details.get("platform"),
@@ -68,6 +78,10 @@ def _to_result_out(row: LookupResult) -> LookupResultOut:
         organization=row.organization,
         location=row.location,
         confidence=float(row.confidence),
+        primary_source=details.get("primary_source"),
+        supporting_sources=supporting_sources,
+        source_count=int(details.get("source_count", 0)),
+        signal_tier=details.get("signal_tier") or details.get("source_tier") or "indirect",
         evidence=row.evidence or [],
         details=details,
         raw=row.raw or {},
@@ -100,9 +114,87 @@ def sources() -> list[dict[str, str]]:
         {"key": "kvk_api", "name": "KVK API", "status": "API-sleutel vereist"},
         {"key": "kvk_public", "name": "KvK publieke zoekresultaten", "status": "publiek internet"},
         {"key": "duckduckgo_search", "name": "DuckDuckGo zoekresultaten", "status": "publiek internet"},
+        {"key": "social_hints", "name": "Social hints", "status": "publiek internet"},
         {"key": "directory_nl", "name": "Nederlandse directories", "status": "publiek internet"},
         {"key": "directory_sites", "name": "Directory & Bedrijfsdata", "status": "publiek internet"},
+        {"key": "twilio_lookup", "name": "Twilio Lookup", "status": "optionele premium API"},
+        {"key": "numlookup_api", "name": "Numlookup API", "status": "optionele premium API"},
+        {"key": "clearbit_lookup", "name": "Clearbit", "status": "optionele premium API"},
+        {"key": "hunter_lookup", "name": "Hunter", "status": "optionele premium API"},
     ]
+
+
+@app.get("/api/v1/metrics")
+def metrics(db: Session = Depends(get_db), window_days: int = 30) -> dict[str, object]:
+    from datetime import timedelta
+
+    window_days = max(1, min(window_days, 365))
+    cutoff = datetime.now(timezone.utc) - timedelta(days=window_days)
+
+    metric_rows = (
+        db.query(SourceRuntimeMetric)
+        .filter(SourceRuntimeMetric.created_at >= cutoff)
+        .all()
+    )
+    source_rows: dict[str, dict[str, object]] = {}
+    for row in metric_rows:
+        bucket = source_rows.setdefault(
+            row.source,
+            {
+                "source": row.source,
+                "calls": 0,
+                "hits": 0,
+                "avg_ms": 0.0,
+                "avg_results": 0.0,
+                "timeout_hits": 0,
+                "last_error": None,
+                "_durations": [],
+                "_results": [],
+            },
+        )
+        bucket["calls"] = int(bucket["calls"]) + 1
+        if row.hit_count:
+            bucket["hits"] = int(bucket["hits"]) + 1
+        bucket["_durations"].append(float(row.duration_ms))
+        bucket["_results"].append(int(row.result_count))
+        if row.error:
+            bucket["last_error"] = row.error
+
+        if isinstance(row.duration_ms, (int, float)) and row.duration_ms >= settings.SEARCH_REQUEST_TIMEOUT_SECONDS * 1000:
+            bucket["timeout_hits"] = int(bucket["timeout_hits"]) + 1
+
+    for bucket in source_rows.values():
+        durations = bucket.pop("_durations", [])
+        results = bucket.pop("_results", [])
+        bucket["avg_ms"] = round((sum(durations) / len(durations)), 2) if durations else 0.0
+        bucket["avg_results"] = round((sum(results) / len(results)), 2) if results else 0.0
+        calls = int(bucket["calls"])
+        bucket["hit_rate"] = round((float(bucket["hits"]) / calls) * 100, 2) if calls else 0.0
+        bucket["timeout_rate"] = round((float(bucket["timeout_hits"]) / calls) * 100, 2) if calls else 0.0
+
+    request_rows = (
+        db.query(LookupRequest).filter(LookupRequest.created_at >= cutoff).filter(LookupRequest.status == "done").all()
+    )
+    conflict_count = 0
+    for request in request_rows:
+        request_results = db.query(LookupResult).filter(LookupResult.request_id == request.id).all()
+        by_platform: dict[str, set[str]] = {}
+        for res in request_results:
+            platform = res.platform or "_"
+            by_platform.setdefault(platform, set()).add(_normalize_name_for_metrics(res.name))
+
+        conflict_signals = {k: len(v) for k, v in by_platform.items() if len(v) > 1}
+        if any(v > 1 for v in conflict_signals.values()):
+            conflict_count += 1
+
+    return {
+        "window_days": window_days,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "request_count": len(request_rows),
+        "conflict_count": conflict_count,
+        "conflict_ratio": round((conflict_count / len(request_rows)), 2) if request_rows else 0.0,
+        "sources": sorted(source_rows.values(), key=lambda item: item["source"]),
+    }
 
 
 @app.post("/api/v1/lookup", response_model=LookupResponse)

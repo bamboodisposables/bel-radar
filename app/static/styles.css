@@ -458,6 +458,11 @@ a {
   color: #35505d;
 }
 
+.score-state {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .tag.platform {
   border-color: #77bed0;
   background: #4ba9be;
@@ -503,6 +508,10 @@ a {
 .score-tag.error {
   background: #fdeaea;
   color: var(--error);
+}
+
+.match-body strong {
+  color: #5e6f7d;
 }
 
 .match-body {

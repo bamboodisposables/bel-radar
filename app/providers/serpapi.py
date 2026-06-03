@@ -7,7 +7,9 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.config import settings
+from app.providers.http_utils import request_with_retries
 from app.providers.base import BasePhoneProvider, ProviderMatch
+from app.services.phone_variants import build_phone_variants
 
 
 PLATFORM_LABELS = {
@@ -19,6 +21,10 @@ PLATFORM_LABELS = {
     "tiktok.com": "TikTok",
     "youtube.com": "YouTube",
     "github.com": "GitHub",
+    "kvk.nl": "KvK",
+    "kvkzoeken.nl": "KvK Zoeken",
+    "mijnbedrijfsgegevens.nl": "Mijn Bedrijfsgegevens",
+    "handelsregister.nl": "Handelsregister",
 }
 
 PLATFORM_MARKERS = {
@@ -32,29 +38,41 @@ PLATFORM_MARKERS = {
     "github",
 }
 
+GOOGLE_BANNED_DOMAINS = {
+    "google.com",
+    "googleusercontent.com",
+    "gstatic.com",
+    "maps.google.com",
+    "youtube.com",
+}
+
+OFFICIAL_DOMAINS = {
+    "kvk.nl",
+    "kvkzoeken.nl",
+    "mijnbedrijfsgegevens.nl",
+    "handelsregister.nl",
+    "kvkregister.nl",
+    "handelsregister-basis.nl",
+    "kvkregisters.nl",
+}
+
+PUBLIC_DOMAINS = {
+    "telefoonboek.nl",
+    "telefoonnummer.nl",
+    "telefoongids.nl",
+    "detelefoonboek.nl",
+    "nummer-zoeken.net",
+    "telefoonnummerzoeken.net",
+    "bedrijfstelefoongids.nl",
+    "mijnbedrijfsgegevens.nl",
+    "handelsregister.nl",
+}
+
 
 class SerpApiProvider(BasePhoneProvider):
     name = "serpapi"
-    description = "SerpAPI + verplichte Google fallback"
+    description = "SerpAPI + Google HTML fallback"
     GOOGLE_SEARCH_BASE_URL = "https://r.jina.ai/http://www.google.com/search"
-    GOOGLE_BANNED_DOMAINS = {
-        "google.com",
-        "googleusercontent.com",
-        "gstatic.com",
-        "maps.google.com",
-        "youtube.com",
-    }
-
-    @staticmethod
-    def _to_number_forms(phone_e164: str) -> list[str]:
-        local = phone_e164[3:] if phone_e164.startswith("+31") else phone_e164
-        if local:
-            local = f"0{local}"
-        spaced = local
-        if len(local) >= 10:
-            spaced = f"{local[:2]} {local[2:4]} {local[4:6]} {local[6:8]} {local[8:]}"
-        compact = local.replace(" ", "")
-        return [phone_e164, local, spaced, compact]
 
     @staticmethod
     def _clean_domain(link: str) -> str:
@@ -63,6 +81,14 @@ class SerpApiProvider(BasePhoneProvider):
         if not domain and "://" in link:
             domain = link.split("://", 1)[1].split("/", 1)[0].lower()
         return domain.strip()
+
+    @staticmethod
+    def _extract_signal_tier(domain: str) -> str:
+        if domain in OFFICIAL_DOMAINS:
+            return "officieel"
+        if domain in PUBLIC_DOMAINS:
+            return "openbaar"
+        return "indirect"
 
     @staticmethod
     def _extract_handle(domain: str, link: str) -> str | None:
@@ -117,7 +143,15 @@ class SerpApiProvider(BasePhoneProvider):
             if candidate and candidate.lower() not in markers:
                 return candidate
 
-        return clean
+        legal = re.search(
+            r"\b([A-Za-zÀ-ÿ0-9'’.-]{3,90}\s(?:BV|B\.V\.?|NV|N\.V\.?|B\.A\.?|Ltd|Limited|GmbH|S\.A\.?|LLC))\b",
+            clean,
+            flags=re.IGNORECASE,
+        )
+        if legal:
+            return legal.group(1).strip()[:255]
+
+        return clean[:255]
 
     @staticmethod
     def _to_provider_match(
@@ -129,13 +163,13 @@ class SerpApiProvider(BasePhoneProvider):
         snippet: str,
         matched: bool,
         query: str,
-        source: str,
         confidence: float,
     ) -> ProviderMatch:
         identity_name = (title and SerpApiProvider._extract_name(title, domain)) or title
+        source_tier = SerpApiProvider._extract_signal_tier(domain)
         return ProviderMatch(
             platform=platform,
-            source=source,
+            source="serpapi",
             match_type="exact" if matched else "context",
             name=identity_name[:255] if identity_name else None,
             account_handle=SerpApiProvider._extract_handle(domain, link),
@@ -145,25 +179,40 @@ class SerpApiProvider(BasePhoneProvider):
             details={
                 "platform": platform,
                 "title": title,
-                "snippet": snippet[:400],
+                "snippet": snippet[:420],
                 "domain": domain,
-                "source_tier": "indirect",
+                "source_tier": source_tier,
+                "signal_tier": source_tier,
             },
-            raw={"link": link, "snippet": snippet[:400], "query": query},
+            raw={"link": link, "snippet": snippet[:420], "query": query},
         )
 
     async def _lookup_serpapi(self, phone_e164: str) -> list[ProviderMatch]:
         if not settings.SERPAPI_API_KEY:
             return []
+
+        number_forms = build_phone_variants(phone_e164)
+        if not number_forms:
+            return []
+
         params = {
-            "q": f'"{phone_e164}"',
+            "q": f'"{number_forms[0]}"',
             "api_key": settings.SERPAPI_API_KEY,
+            "num": settings.DDG_MAX_RESULTS,
         }
 
         try:
-            timeout = httpx.Timeout(settings.REQUEST_TIMEOUT_SECONDS)
+            timeout = httpx.Timeout(settings.SEARCH_REQUEST_TIMEOUT_SECONDS)
             async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.get(settings.SERPAPI_BASE_URL, params=params)
+                response = await request_with_retries(
+                    client,
+                    "GET",
+                    settings.SERPAPI_BASE_URL,
+                    scope="serpapi",
+                    params=params,
+                )
+                if response is None:
+                    return []
                 if response.status_code != 200:
                     return []
                 payload = response.json()
@@ -171,7 +220,6 @@ class SerpApiProvider(BasePhoneProvider):
             return []
 
         results: list[ProviderMatch] = []
-        number_forms = self._to_number_forms(phone_e164)
         for item in payload.get("organic_results", [])[: settings.DDG_MAX_RESULTS]:
             title = item.get("title") or ""
             link = item.get("link") or ""
@@ -184,6 +232,7 @@ class SerpApiProvider(BasePhoneProvider):
 
             matched = any(form and (form in title or form in snippet) for form in number_forms)
             platform = PLATFORM_LABELS.get(domain) or domain
+            source_tier = self._extract_signal_tier(domain)
             results.append(
                 self._to_provider_match(
                     platform=platform,
@@ -192,39 +241,43 @@ class SerpApiProvider(BasePhoneProvider):
                     link=link,
                     snippet=snippet,
                     matched=matched,
-                    query=f'"{phone_e164}"',
-                    source=self.name,
-                    confidence=0.82,
+                    query=f'"{number_forms[0]}"',
+                    confidence=0.84 if source_tier != "indirect" else 0.66,
                 )
             )
         return results
 
     async def _lookup_google_html(self, phone_e164: str) -> list[ProviderMatch]:
-        number_forms = self._to_number_forms(phone_e164)
-        queries = [f'"{number}"' for number in number_forms[:2]]
+        number_forms = build_phone_variants(phone_e164)
+        if not number_forms:
+            return []
 
+        queries = [f'"{number}"' for number in number_forms[:2]]
         results: list[ProviderMatch] = []
         seen: set[str] = set()
 
-        timeout = httpx.Timeout(settings.REQUEST_TIMEOUT_SECONDS)
+        timeout = httpx.Timeout(settings.SEARCH_REQUEST_TIMEOUT_SECONDS)
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
             for query in queries:
                 try:
-                    response = await client.get(
+                    response = await request_with_retries(
+                        client,
+                        "GET",
                         self.GOOGLE_SEARCH_BASE_URL,
+                        scope="serpapi",
                         params={"q": query, "num": settings.DDG_MAX_RESULTS},
                         headers={"User-Agent": "Mozilla/5.0"},
                     )
                 except Exception:
                     continue
-                if response.status_code != 200:
+                if response is None or response.status_code != 200:
                     continue
 
                 html = response.text
                 soup = BeautifulSoup(html, "html.parser")
+                parsed_any = False
                 heading_tags = soup.select("h3")
 
-                parsed_any = False
                 for heading in heading_tags[: settings.DDG_MAX_RESULTS]:
                     title = " ".join(heading.get_text(" ", strip=True).split())
                     if not title:
@@ -251,6 +304,7 @@ class SerpApiProvider(BasePhoneProvider):
                     seen.add(link)
                     parsed_any = True
                     platform = PLATFORM_LABELS.get(domain) or domain
+                    source_tier = self._extract_signal_tier(domain)
                     matched = any(form and (form in title or form in snippet) for form in number_forms)
                     results.append(
                         self._to_provider_match(
@@ -261,8 +315,7 @@ class SerpApiProvider(BasePhoneProvider):
                             snippet=snippet,
                             matched=matched,
                             query=query,
-                            source=self.name,
-                            confidence=0.82 if matched else 0.58,
+                            confidence=0.76 if source_tier != "indirect" else 0.58,
                         )
                     )
 
@@ -290,8 +343,7 @@ class SerpApiProvider(BasePhoneProvider):
                             snippet="",
                             matched=matched,
                             query=query,
-                            source=self.name,
-                            confidence=0.71 if matched else 0.55,
+                            confidence=0.72 if matched else 0.56,
                         )
                     )
 
@@ -306,7 +358,6 @@ class SerpApiProvider(BasePhoneProvider):
         except Exception:
             google_results = []
 
-        # SerpAPI blijft behouden voor structured data, maar Google is gegarandeerd meegenomen.
         results: list[ProviderMatch] = []
         results.extend(serpapi_results)
         results.extend(google_results)
@@ -314,4 +365,12 @@ class SerpApiProvider(BasePhoneProvider):
         if not results:
             return []
 
-        return results[: settings.DDG_MAX_RESULTS * 2]
+        seen: set[str] = set()
+        deduped: list[ProviderMatch] = []
+        for item in results:
+            key = (item.account_url or "").lower().strip()
+            if key and key not in seen:
+                seen.add(key)
+                deduped.append(item)
+
+        return deduped[: settings.DDG_MAX_RESULTS * 2]

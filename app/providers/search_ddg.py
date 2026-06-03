@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from urllib.parse import parse_qs, quote_plus, unquote, urlparse
 
 import httpx
@@ -6,6 +7,8 @@ from bs4 import BeautifulSoup
 
 from app.config import settings
 from app.providers.base import BasePhoneProvider, ProviderMatch
+from app.providers.http_utils import request_with_retries
+from app.services.phone_variants import build_phone_variants, make_query_plan
 
 
 PLATFORM_LABELS = {
@@ -17,6 +20,11 @@ PLATFORM_LABELS = {
     "tiktok.com": "TikTok",
     "youtube.com": "YouTube",
     "github.com": "GitHub",
+    "telefoonnummer.nl": "Telefoonnummer.nl",
+    "telefoongids.nl": "Telefoongids",
+    "kvk.nl": "KvK",
+    "kvkzoeken.nl": "KvK Zoeken",
+    "mijnbedrijfsgegevens.nl": "Mijn Bedrijfsgegevens",
 }
 
 PLATFORM_MARKERS = {
@@ -65,17 +73,6 @@ class DuckDuckGoSearchProvider(BasePhoneProvider):
             if next_url:
                 return unquote(next_url)
         return raw_url
-
-    @staticmethod
-    def _to_number_forms(phone_e164: str) -> list[str]:
-        local = phone_e164[3:] if phone_e164.startswith("+31") else phone_e164
-        if local:
-            local = f"0{local}"
-        spaced = local
-        if len(local) >= 10:
-            spaced = f"{local[:2]} {local[2:4]} {local[4:6]} {local[6:8]} {local[8:]}"
-        compact = local.replace(" ", "")
-        return [phone_e164, local, spaced, compact]
 
     @staticmethod
     def _extract_handle(domain: str, raw_url: str) -> str | None:
@@ -129,20 +126,45 @@ class DuckDuckGoSearchProvider(BasePhoneProvider):
         if not settings.ENABLE_DDG_SCRAPING:
             return []
 
-        number_forms = self._to_number_forms(phone_e164)
-        queries = [f'"{number}"' for number in number_forms[:2]]
-        for number in number_forms[:2]:
-            for domain in self.SOCIAL_DOMAINS:
+        number_forms = build_phone_variants(phone_e164)
+        if not number_forms:
+            return []
+
+        queries = make_query_plan(
+            phone_e164,
+            base_queries=[
+                '"{phone}" telefoonnummer',
+                '"{phone}" bedrijfsgegevens',
+                '"{phone}" bedrijf',
+            ],
+            broad_queries=[
+                '{phone} "openbaar"',
+                '{phone} "website"',
+                '{phone} "KvK"',
+            ],
+        )
+        for domain in self.SOCIAL_DOMAINS:
+            for number in number_forms[:1]:
                 queries.append(f'"{number}" site:{domain}')
+
+        queries = list(dict.fromkeys(queries))[:14]
 
         results: list[ProviderMatch] = []
         timeout = httpx.Timeout(settings.REQUEST_TIMEOUT_SECONDS)
 
-        for query in queries[:10]:
+        for query in queries:
             url = f"https://duckduckgo.com/html/?q={quote_plus(query)}"
             try:
                 async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-                    resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+                    resp = await request_with_retries(
+                        client,
+                        "GET",
+                        url,
+                        scope="duckduckgo_search",
+                        headers={"User-Agent": settings.HTTP_USER_AGENT},
+                    )
+                    if resp is None:
+                        continue
                     resp.raise_for_status()
             except Exception:
                 continue
@@ -159,42 +181,41 @@ class DuckDuckGoSearchProvider(BasePhoneProvider):
                     continue
                 seen.add(href)
 
-                snippet_node = None
                 parent = link.find_parent("div")
-                if parent:
-                    snippet_node = parent.find_next_sibling("div")
-                snippet = ""
-                if snippet_node:
-                    snippet = " ".join(snippet_node.get_text(" ", strip=True).split())
+                snippet_node = parent.find_next_sibling("div") if parent else None
+                snippet = " ".join(snippet_node.get_text(" ", strip=True).split()) if snippet_node else ""
 
                 domain = self._clean_domain(href)
                 if not domain or domain in self.BANNED_DOMAINS:
                     continue
+                if domain in self.SOCIAL_DOMAINS:
+                    # Socialen worden apart behandeld via social_hints.
+                    continue
 
                 matched = any(number in title or number in snippet for number in number_forms if number)
                 platform = PLATFORM_LABELS.get(domain) or domain
-
                 social_handle = self._extract_handle(domain, href)
-                identity_name = self._extract_name(title, domain) or title
 
                 results.append(
                     ProviderMatch(
                         platform=platform,
                         source=self.name,
                         match_type="exact" if matched else "context",
-                        name=identity_name[:255] if identity_name else None,
+                        name=self._extract_name(title, domain),
                         account_handle=social_handle,
                         account_url=href,
-                        confidence=0.72 if domain in self.SOCIAL_DOMAINS else 0.48,
-                        evidence=[f"search_query={query}", f"social_domain={domain}"],
+                        confidence=0.72 if matched else 0.48,
+                        evidence=[f"search_query={query}", f"source_domain={domain}"],
                         details={
                             "platform": platform,
                             "title": title,
                             "snippet": snippet[:400],
                             "domain": domain,
-                            "source_tier": "indirect",
+                            "source_tier": "openbaar",
+                            "signal_tier": "openbaar",
                         },
                         raw={"href": href, "query": query},
                     )
                 )
+
         return results

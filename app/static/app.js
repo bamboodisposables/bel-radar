@@ -2,6 +2,7 @@ const singleForm = document.getElementById("singleForm");
 const singleInput = document.getElementById("singlePhone");
 const singleClear = document.getElementById("singleClear");
 const singleRefresh = document.getElementById("singleRefresh");
+const singleHideUntrusted = document.getElementById("singleHideUntrusted");
 const singleResult = document.getElementById("singleResult");
 const singleResultLayer = document.getElementById("singleResultLayer");
 const globalStatus = document.getElementById("globalStatus");
@@ -25,10 +26,15 @@ const sourceLabels = {
   numverify: "Numverify API",
   serpapi: "SerpAPI",
   duckduckgo_search: "DuckDuckGo",
+  social_hints: "Social hints",
   kvk_api: "KVK API",
   kvk_public: "KVK Publiek",
   directory_nl: "Nederlandse directories",
   directory_sites: "Directory & Bedrijfsdata",
+  twilio_lookup: "Twilio Lookup",
+  numlookup_api: "Numlookup",
+  clearbit_lookup: "Clearbit",
+  hunter_lookup: "Hunter",
 };
 const trustLabels = {
   officieel: "Officieel",
@@ -75,14 +81,55 @@ function confidenceLabel(value) {
 
 function confidenceClass(value, matchType) {
   const score = Number(value || 0);
-  if (matchType === "exact" || score >= 0.75) return "";
+  if (score >= 0.75 && matchType === "exact") return "high";
+  if (matchType === "exact" || score >= 0.6) return "";
   if (score >= 0.45) return "warn";
   return "error";
 }
 
+function trustBadgeClass(sourceTier) {
+  if (sourceTier === "officieel") return "official";
+  if (sourceTier === "openbaar") return "public";
+  return "indirect";
+}
+
+function confidenceBand(value) {
+  const score = Number(value || 0);
+  if (score >= 0.65) return "betrouwbaar";
+  if (score >= 0.45) return "middelmatig";
+  return "laag vertrouwen";
+}
+
+function shouldShowResult(item) {
+  if (!singleHideUntrusted || !singleHideUntrusted.checked) return true;
+  const signalTier = item.signal_tier || item?.details?.source_tier || "indirect";
+  const confidence = Number(item.confidence || 0);
+  return (signalTier === "officieel" || signalTier === "openbaar") && confidence >= 0.4;
+}
+
+function sourceStack(item) {
+  const stack = [];
+  const primary = item.source;
+  if (primary) {
+    stack.push(primary);
+  }
+  if (Array.isArray(item.supporting_sources)) {
+    for (const source of item.supporting_sources) {
+      if (source && !stack.includes(source)) {
+        stack.push(source);
+      }
+    }
+  }
+
+  return stack.length ? stack : [item.source || "Onbekende bron"];  
+}
+
 function updateCounts(results) {
   const matchCount = results.length;
-  const highConfidenceCount = results.filter((item) => Number(item.confidence || 0) >= 0.75).length;
+  const highConfidenceCount = results.filter((item) => {
+    const score = Number(item.confidence || 0);
+    return score >= 0.75;
+  }).length;
   kpiMatches.textContent = `${matchCount} resultaten`;
   kpiHigh.textContent = `${highConfidenceCount} betrouwbare treffers`;
 }
@@ -103,10 +150,6 @@ function translateTrust(sourceTier) {
   return trustLabels[sourceTier] || "Indicatief";
 }
 
-function trustClass(sourceTier) {
-  return sourceTier === "officieel" ? "official" : sourceTier === "openbaar" ? "public" : "indirect";
-}
-
 function renderSummary(text, target) {
   target.className = "summary-box";
   target.textContent = text;
@@ -117,7 +160,22 @@ function renderEmptyResults(message) {
   singleResultLayer.innerHTML = `<span class="empty-label">${escapeHtml(message)}</span>`;
 }
 
+function formatAge(discoveredAt) {
+  if (!discoveredAt) return "onbekend";
+  const ms = Date.now() - Date.parse(discoveredAt);
+  if (!Number.isFinite(ms) || ms < 0) return "onbekend";
+  const minutes = Math.floor(ms / 60000);
+  if (minutes < 1) return "net gevonden";
+  if (minutes < 60) return `${minutes} min geleden`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} uur geleden`;
+  const days = Math.floor(hours / 24);
+  return `${days} dagen geleden`;
+}
+
 function renderMatches(results, stamp) {
+  const filtered = (results || []).filter(shouldShowResult);
+
   if (!results.length) {
     updateCounts([]);
     resultStamp.textContent = stamp;
@@ -125,17 +183,33 @@ function renderMatches(results, stamp) {
     return;
   }
 
-  const cards = results
+  if (!filtered.length) {
+    updateCounts([]);
+    resultStamp.textContent = stamp;
+    renderEmptyResults("Geen betrouwbare bron zichtbaar met de ingestelde filter.");
+    return;
+  }
+
+  const cards = filtered
     .map((item) => {
       const platform = escapeHtml(item.platform || translateSource(item.source) || "Onbekend platform");
-      const source = escapeHtml(translateSource(item.source));
+      const mainSource = escapeHtml(translateSource(item.source));
       const matchType = escapeHtml(translateMatchType(item.match_type));
-      const trustTier = item?.details?.source_tier || "indirect";
+      const trustTier = item.signal_tier || item?.details?.source_tier || "indirect";
+      const support = sourceStack(item);
+      const supportLabel = support.length > 1 ? `${escapeHtml(translateSource(support[0]))} + ${support.length - 1} bron(nen)` : "1 bron";
+      const alternatives = support.slice(1).map(translateSource).map(escapeHtml);
+      const alternativeLabel = alternatives.length ? alternatives.join(", ") : "geen alternatieven";
       const name = escapeHtml(item.name || item.organization || item.account_handle || platform || "Onbekend");
       const handle = escapeHtml(item.account_handle || "-");
       const organization = escapeHtml(item.organization || "-");
       const location = escapeHtml(item.location || "-");
+      const confidence = Number(item.confidence || 0);
       const evidence = escapeHtml((item.evidence || []).slice(0, 6).join(" | ") || "-");
+      const confidenceText = confidenceLabel(confidence);
+      const sourceText = escapeHtml(supportLabel);
+      const confidenceBadge = confidenceBand(confidence);
+      const discovered = formatAge(item.discovered_at);
       const url = item.account_url
         ? `<a href="${escapeAttr(item.account_url)}" target="_blank" rel="noopener">${escapeHtml(item.account_url)}</a>`
         : "-";
@@ -145,17 +219,23 @@ function renderMatches(results, stamp) {
           <div class="match-top">
             <div class="match-tags">
               <span class="tag platform">${platform}</span>
-              <span class="tag">${source}</span>
-              <span class="tag trust-tag trust-${trustClass(trustTier)}">${translateTrust(trustTier)}</span>
+              <span class="tag">${mainSource}</span>
+              <span class="tag">${sourceText}</span>
+              <span class="tag trust-tag trust-${trustBadgeClass(trustTier)}">${translateTrust(trustTier)}</span>
               <span class="tag">${matchType}</span>
+              <span class="tag score-state">${confidenceBadge}</span>
             </div>
-            <span class="tag score-tag ${confidenceClass(item.confidence, item.match_type)}">${confidenceLabel(item.confidence)}</span>
+            <span class="tag score-tag ${confidenceClass(item.confidence, item.match_type)}">${confidenceText}</span>
           </div>
           <div class="match-body">
             <strong>Naam</strong><span>${name}</span>
+            <strong>Bron</strong><span>${sourceText}</span>
+            <strong>Alternatieve bronnen</strong><span>${alternativeLabel}</span>
             <strong>Gebruikersnaam</strong><span>${handle}</span>
             <strong>Organisatie</strong><span>${organization}</span>
             <strong>Locatie</strong><span>${location}</span>
+            <strong>Signaal</strong><span>${discoveredAtLabel(confidence)}</span>
+            <strong>Gevonden</strong><span>${discovered}</span>
             <strong>Link</strong><span>${url}</span>
             <strong>Bewijs</strong><span>${evidence}</span>
           </div>
@@ -164,10 +244,17 @@ function renderMatches(results, stamp) {
     })
     .join("");
 
-  updateCounts(results);
+  updateCounts(filtered);
   resultStamp.textContent = stamp;
   singleResultLayer.className = "result-layer";
   singleResultLayer.innerHTML = cards;
+}
+
+function discoveredAtLabel(confidence) {
+  const score = Number(confidence || 0);
+  if (score >= 0.75) return "recent / sterke match";
+  if (score >= 0.45) return "recent / indicatief";
+  return "laag vertrouwen";
 }
 
 function resetSingleView() {
