@@ -119,13 +119,15 @@ class KvkApiProvider(BasePhoneProvider):
             if not isinstance(record, dict):
                 continue
 
-            name = _parse_name(record)
             organization = record.get("tradeNames")
             organization = _parse_name(record.get("tradeNames", {})) if isinstance(organization, dict) else organization
             if not isinstance(organization, str):
                 organization = None
+            if isinstance(organization, str) and organization.strip():
+                organization = organization.strip()[:255]
 
             city = _parse_city_from_address(record)
+            name = _parse_name(record) or organization or city
             website = record.get("website")
             if isinstance(website, dict):
                 website = website.get("url")

@@ -146,6 +146,8 @@ class DuckDuckGoSearchProvider(BasePhoneProvider):
 
                 social_handle = self._extract_handle(domain, href)
                 identity_name = self._extract_name(title, domain)
+                if not identity_name:
+                    identity_name = title
 
                 results.append(
                     ProviderMatch(
@@ -162,6 +164,7 @@ class DuckDuckGoSearchProvider(BasePhoneProvider):
                             "title": title,
                             "snippet": snippet[:400],
                             "domain": domain,
+                            "source_tier": "indirect",
                         },
                         raw={"href": href},
                     )

@@ -36,6 +36,7 @@ class NumverifyProvider(BasePhoneProvider):
             ProviderMatch(
                 source=self.name,
                 match_type="context",
+                name=payload.get("carrier") or "Onbekende gebruiker",
                 location=payload.get("location"),
                 organization=payload.get("carrier"),
                 confidence=0.35,
@@ -44,6 +45,7 @@ class NumverifyProvider(BasePhoneProvider):
                     "country_name": payload.get("country_name"),
                     "line_type": payload.get("line_type"),
                     "carrier": payload.get("carrier"),
+                    "source_tier": "officieel",
                 },
                 raw=payload,
             )

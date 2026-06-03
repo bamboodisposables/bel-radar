@@ -21,6 +21,7 @@ class TelecomMetadataProvider(BasePhoneProvider):
             ProviderMatch(
                 source=self.name,
                 match_type="inconclusive",
+                name=carrier.name_for_number(parsed, "en") or "Telefoonlijn",
                 organization="telecom metadata",
                 location=geocoder.description_for_number(parsed, "en"),
                 confidence=0.25,
@@ -29,6 +30,7 @@ class TelecomMetadataProvider(BasePhoneProvider):
                     "national_number": str(parsed.national_number),
                     "carrier": carrier.name_for_number(parsed, "en"),
                     "time_zones": list(timezone.time_zones_for_number(parsed)),
+                    "source_tier": "officieel",
                 },
                 raw={"e164": phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)},
             )

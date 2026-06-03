@@ -188,7 +188,7 @@ class DutchDirectoryProvider(BasePhoneProvider):
 
                 matched = any(number in title or number in snippet for number in number_forms)
                 match_type = "exact" if matched else "context"
-                name = self._extract_name(title, domain)
+                name = self._extract_name(title, domain) or title
 
                 results.append(
                     ProviderMatch(

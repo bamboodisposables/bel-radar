@@ -120,6 +120,8 @@ class SerpApiProvider(BasePhoneProvider):
             platform = PLATFORM_LABELS.get(domain) or domain
             handle = self._extract_handle(domain, link)
             identity_name = self._extract_name(title, domain)
+            if not identity_name:
+                identity_name = title
             if f'"{phone_e164}"' in snippet:
                 matched = True
             else:
@@ -132,10 +134,16 @@ class SerpApiProvider(BasePhoneProvider):
                     name=identity_name[:255] if identity_name else None,
                     account_handle=handle,
                     account_url=link,
-                    confidence=0.8,
-                    evidence=[f"serpapi_query={phone_e164}"],
-                    details={"platform": platform, "title": title, "snippet": snippet[:400], "domain": domain},
-                    raw=item,
-                )
+                confidence=0.8,
+                evidence=[f"serpapi_query={phone_e164}"],
+                details={
+                    "platform": platform,
+                    "title": title,
+                    "snippet": snippet[:400],
+                    "domain": domain,
+                    "source_tier": "indirect",
+                },
+                raw=item,
             )
+        )
         return results

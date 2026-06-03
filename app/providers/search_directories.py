@@ -44,7 +44,23 @@ class DirectorySearchProvider(BasePhoneProvider):
         clean = " ".join(title.split())
         if domain and domain in clean.lower():
             clean = clean.replace(domain, "").strip()
-        return clean or None
+        return clean[:255] or None
+
+    @staticmethod
+    def _extract_location(text: str) -> str | None:
+        if not text:
+            return None
+
+        for marker in (" - ", " | ", ",", " · "):
+            parts = text.split(marker)
+            if len(parts) >= 3:
+                for part in parts[1:]:
+                    token = part.strip()
+                    if token and any(ch.isdigit() for ch in token):
+                        continue
+                    if 3 <= len(token) <= 45:
+                        return token
+        return None
 
     async def lookup(self, phone_e164: str, context=None) -> list[ProviderMatch]:
         queries = [f'"{phone_e164}" telefoonboeker', f'"{phone_e164}" directory']
@@ -80,19 +96,28 @@ class DirectorySearchProvider(BasePhoneProvider):
 
                 matched = phone_e164 in title or phone_e164 in snippet
                 platform = PLATFORM_LABELS.get(domain, domain or "Directory")
-                name = self._extract_name(title, domain)
+                name = self._extract_name(title, domain) or title
+                location = self._extract_location(f"{title} {snippet}")
 
                 results.append(
                     ProviderMatch(
                         platform=platform,
                         source=self.name,
                         match_type="exact" if matched else "context",
-                        name=name[:255] if name else None,
+                        name=name,
                         account_handle=None,
                         account_url=href,
+                        organization=None,
+                        location=location,
                         confidence=0.61 if domain in self.SEARCH_DOMAINS else 0.48,
                         evidence=[f"directory_query={query}", f"directory_domain={domain}"],
-                        details={"platform": platform, "title": title, "snippet": snippet[:400], "domain": domain},
+                        details={
+                            "platform": platform,
+                            "title": title,
+                            "snippet": snippet[:400],
+                            "domain": domain,
+                            "source_tier": "openbaar",
+                        },
                         raw={"href": href, "query": query},
                     )
                 )

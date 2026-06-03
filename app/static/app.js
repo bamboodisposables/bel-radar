@@ -129,7 +129,7 @@ function renderMatches(results, stamp) {
       const source = escapeHtml(translateSource(item.source));
       const matchType = escapeHtml(translateMatchType(item.match_type));
       const trustTier = item?.details?.source_tier || "indirect";
-      const name = escapeHtml(item.name || "Onbekend");
+      const name = escapeHtml(item.name || item.organization || item.account_handle || platform || "Onbekend");
       const handle = escapeHtml(item.account_handle || "-");
       const organization = escapeHtml(item.organization || "-");
       const location = escapeHtml(item.location || "-");
