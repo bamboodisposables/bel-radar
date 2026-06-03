@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     NUMVERIFY_BASE_URL: str = "https://api.apilayer.com/number_verification/validate"
     SERPAPI_API_KEY: str | None = None
     SERPAPI_BASE_URL: str = "https://serpapi.com/search.json"
+    KVK_API_KEY: str | None = None
+    KVK_API_BASE_URL: str = "https://api.kvk.nl/api/v2/zoeken"
     ENABLE_DDG_SCRAPING: bool = True
     DDG_MAX_RESULTS: int = 6
     REQUEST_TIMEOUT_SECONDS: int = 12
