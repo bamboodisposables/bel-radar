@@ -4,7 +4,9 @@ from app.providers.base import ProviderMatch
 BASE_SOURCE_WEIGHT = {
     "phonenumbers_metadata": 0.25,
     "numverify": 0.35,
+    "serpapi": 0.68,
     "duckduckgo_search": 0.74,
+    "duckduckgo": 0.74,
     "directory_sites": 0.66,
     "directory_nl": 0.82,
     "kvk_api": 0.92,

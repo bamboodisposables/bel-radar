@@ -24,6 +24,10 @@ class DirectorySearchProvider(BasePhoneProvider):
 
     SEARCH_DOMAINS = [
         "telefoonboek.nl",
+        "telefoonnummer.nl",
+        "telefoongids.nl",
+        "detelefoonboek.nl",
+        "telefoonnummer.info",
         "yellowpages.com",
         "manta.com",
         "yelp.com",

@@ -14,6 +14,7 @@ PLATFORM_LABELS = {
     "telefoonnummer.nl": "Telefoonnummer.nl",
     "telefoongids.nl": "Telefoongids",
     "detelefoonboek.nl": "De TelefoonGids",
+    "telefoonnummer.info": "Telefoonnummer.info",
     "kvk.nl": "KvK",
 }
 
@@ -22,6 +23,7 @@ NETHERLANDS_DOMAINS = [
     "telefoonnummer.nl",
     "telefoongids.nl",
     "detelefoonboek.nl",
+    "telefoonnummer.info",
     "kvk.nl",
 ]
 
@@ -164,6 +166,8 @@ class DutchDirectoryProvider(BasePhoneProvider):
                     f'"{number}" directory',
                     f'"{number}" "Nederland"',
                     f'"{number}" kvk',
+                    f'"{number}" telefoon',
+                    f'"{number}" bedrijf',
                 ]
             )
         for domain in NETHERLANDS_DOMAINS:
