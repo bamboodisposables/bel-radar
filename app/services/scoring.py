@@ -6,6 +6,7 @@ BASE_SOURCE_WEIGHT = {
     "numverify": 0.35,
     "duckduckgo_search": 0.74,
     "directory_sites": 0.66,
+    "directory_nl": 0.82,
 }
 
 
