@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
@@ -31,6 +32,18 @@ from app.services.orchestrator import create_lookup_request, run_lookup_with_sto
 
 app = FastAPI(title=settings.APP_NAME)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+_ALLOWED_ORIGINS = [origin.strip() for origin in settings.CORS_ALLOWED_ORIGINS.split(",") if origin.strip()]
+if not _ALLOWED_ORIGINS:
+    _ALLOWED_ORIGINS = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.on_event("startup")

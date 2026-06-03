@@ -19,6 +19,7 @@ const bulkProgressText = document.getElementById("bulkProgressText");
 const jobStatus = document.getElementById("jobStatus");
 
 const apiEnabled = window.location.protocol !== "file:";
+const apiBase = apiEnabled && window.__BELRADAR_API_BASE ? window.__BELRADAR_API_BASE : "";
 const sourceLabels = {
   phonenumbers_metadata: "Telefoonmetadata",
   numverify: "Numverify API",
@@ -182,7 +183,7 @@ async function runSingleLookup(phoneNumber) {
   renderSummary("Zoekopdracht gestart...\nBel Radar verzamelt publieke signalen.", singleResult);
   renderEmptyResults("Resultaten worden geladen...");
 
-  const response = await fetch("/api/v1/lookup", {
+  const response = await fetch(`${apiBase}/api/v1/lookup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -213,7 +214,7 @@ async function runSingleLookup(phoneNumber) {
 }
 
 async function pollJob(jobId) {
-  const response = await fetch(`/api/v1/jobs/${jobId}`);
+  const response = await fetch(`${apiBase}/api/v1/jobs/${jobId}`);
   if (!response.ok) {
     setStatus("Batch mislukt", "err");
     renderSummary("Taak niet gevonden.", jobStatus);
@@ -297,7 +298,7 @@ bulkForm.addEventListener("submit", async (event) => {
   renderSummary("Batchscan wordt gestart...", bulkResult);
   renderSummary("Geen actieve taak.", jobStatus);
 
-  const response = await fetch("/api/v1/lookup/bulk", {
+  const response = await fetch(`${apiBase}/api/v1/lookup/bulk`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ numbers, async_mode: bulkAsync.checked }),
@@ -326,7 +327,7 @@ if (!apiEnabled) {
   runtimeHint.textContent = "Voorbeeldmodus via file://. Open http://127.0.0.1:8000 voor live zoekopdrachten.";
   setStatus("Previewmodus", "busy");
 } else {
-  runtimeHint.textContent = "Live modus actief. Resultaten komen direct uit de API en openbare bronnen.";
+  runtimeHint.textContent = `Live modus actief op ${window.location.host || window.location.href}. Resultaten komen direct uit API en openbare bronnen.`;
 }
 
 resetSingleView();

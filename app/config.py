@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     ENABLE_DDG_SCRAPING: bool = True
     DDG_MAX_RESULTS: int = 6
     REQUEST_TIMEOUT_SECONDS: int = 12
+    CORS_ALLOWED_ORIGINS: str = "*"
 
 
 settings = Settings()
