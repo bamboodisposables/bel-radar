@@ -13,6 +13,11 @@ class KvkPublicProvider(BasePhoneProvider):
     name = "kvk_public"
     description = "KvK publieke zoekresultaten"
     BANNED_DOMAINS = {"duckduckgo.com", "claritycheck.org", "claritycheck.net"}
+    KVK_MIRROR_DOMAINS = [
+        "kvk.nl",
+        "kvkzoeken.nl",
+        "mijnbedrijfsgegevens.nl",
+    ]
 
     @staticmethod
     def _clean_domain(raw_url: str) -> str:
@@ -50,8 +55,15 @@ class KvkPublicProvider(BasePhoneProvider):
         number_forms = self._to_number_forms(phone_e164)
         queries = [f'"{number}" KvK' for number in number_forms[:2]]
         queries.append(f'"{number_forms[0]}" site:kvk.nl')
+        queries.append(f'"{number_forms[0]}" "KVK-nummer"')
+        queries.append(f'"{number_forms[0]}" "KvK zoeken op telefoonnummer"')
+        queries.append(f'"{number_forms[0]}" "KvK bedrijf"')
         if number_forms[1]:
             queries.append(f'"{number_forms[1]}" site:kvk.nl')
+        for domain in self.KVK_MIRROR_DOMAINS:
+            if domain == "kvk.nl":
+                continue
+            queries.append(f'"{number_forms[0]}" site:{domain}')
 
         results: list[ProviderMatch] = []
         seen: set[str] = set()

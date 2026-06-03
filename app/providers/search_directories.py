@@ -14,6 +14,13 @@ PLATFORM_LABELS = {
     "manta.com": "Manta",
     "yelp.com": "Yelp",
     "opencorporates.com": "OpenCorporates",
+    "nummer-zoeken.net": "Nummer Zoeken",
+    "telefoonnummer.nl": "Telefoonnummer.nl",
+    "telefoonnummerzoeken.net": "Telefoonnummerzoeken",
+    "bedrijfstelefoongids.nl": "Bedrijfstelefoongids",
+    "nationaletelefoongids.nl": "Nationale Telefoongids",
+    "telefoongids-nl.nl": "Telefoongids-NL",
+    "telefoonnummers.org": "Telefoonnummers.org",
 }
 
 
@@ -24,10 +31,16 @@ class DirectorySearchProvider(BasePhoneProvider):
 
     SEARCH_DOMAINS = [
         "telefoonboek.nl",
+        "nummer-zoeken.net",
         "telefoonnummer.nl",
         "telefoongids.nl",
         "detelefoonboek.nl",
         "telefoonnummer.info",
+        "telefoonnummerzoeken.net",
+        "bedrijfstelefoongids.nl",
+        "nationaletelefoongids.nl",
+        "telefoongids-nl.nl",
+        "telefoonnummers.org",
         "yellowpages.com",
         "manta.com",
         "yelp.com",
