@@ -1,6 +1,7 @@
 const singleForm = document.getElementById("singleForm");
 const singleInput = document.getElementById("singlePhone");
 const singleClear = document.getElementById("singleClear");
+const singleRefresh = document.getElementById("singleRefresh");
 const singleResult = document.getElementById("singleResult");
 const singleResultLayer = document.getElementById("singleResultLayer");
 const globalStatus = document.getElementById("globalStatus");
@@ -184,7 +185,10 @@ async function runSingleLookup(phoneNumber) {
   const response = await fetch("/api/v1/lookup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phone_number: phoneNumber }),
+    body: JSON.stringify({
+      phone_number: phoneNumber,
+      force_refresh: singleRefresh ? singleRefresh.checked : false,
+    }),
   });
   const payload = await response.json();
 

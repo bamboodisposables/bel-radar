@@ -102,8 +102,12 @@ async def lookup(phone_input: LookupRequestInput, db: Session = Depends(get_db))
             detail="Ongeldig telefoonnummer",
         ) from exc
 
-    request, created_new, phone_e164 = create_lookup_request(db, phone_input.phone_number)
-    if request.status == "done" and not created_new:
+    request, created_new, phone_e164 = create_lookup_request(
+        db,
+        phone_input.phone_number,
+        force_refresh=phone_input.force_refresh,
+    )
+    if request.status == "done" and not created_new and not phone_input.force_refresh:
         results = (
             db.query(LookupResult)
             .filter(LookupResult.request_id == request.id)
@@ -120,7 +124,7 @@ async def lookup(phone_input: LookupRequestInput, db: Session = Depends(get_db))
         )
 
     try:
-        results = await run_lookup_with_store(db, request)
+        results = await run_lookup_with_store(db, request, force_refresh=phone_input.force_refresh)
     except Exception as exc:
         request.status = "error"
         request.error = str(exc)
@@ -170,9 +174,13 @@ async def lookup_bulk(
     if not payload.async_mode:
         results: list[LookupResponse] = []
         for raw in numbers:
-            req, created_new, phone_e164 = create_lookup_request(db, raw)
+            req, created_new, phone_e164 = create_lookup_request(
+                db,
+                raw,
+                force_refresh=payload.force_refresh,
+            )
             if created_new:
-                response = await run_lookup_with_store(db, req)
+                response = await run_lookup_with_store(db, req, force_refresh=payload.force_refresh)
             else:
                 response = (
                     db.query(LookupResult)

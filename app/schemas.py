@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 class LookupRequestInput(BaseModel):
     phone_number: str = Field(..., min_length=3, examples=["06 12 34 56 78"])
+    force_refresh: bool = False
 
 
 class LookupResultOut(BaseModel):
@@ -40,6 +41,7 @@ class LookupResponse(BaseModel):
 
 class BulkLookupRequest(BaseModel):
     numbers: list[str]
+    force_refresh: bool = False
     async_mode: bool = True
     max_items: int = 100
 

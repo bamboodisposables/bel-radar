@@ -1,5 +1,5 @@
 from __future__ import annotations
-from urllib.parse import quote_plus, urlparse
+from urllib.parse import parse_qs, quote_plus, unquote, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -34,6 +34,7 @@ PLATFORM_MARKERS = {
 class DuckDuckGoSearchProvider(BasePhoneProvider):
     name = "duckduckgo_search"
     description = "Publieke zoekresultaten als publieke aanwijzing"
+    BANNED_DOMAINS = {"duckduckgo.com", "claritycheck.net", "claritycheck.org", "search.brave.com"}
 
     SOCIAL_DOMAINS = [
         "facebook.com",
@@ -53,6 +54,28 @@ class DuckDuckGoSearchProvider(BasePhoneProvider):
         if not domain and "://" in raw_url:
             domain = raw_url.split("://", 1)[1].split("/", 1)[0].lower()
         return domain.strip()
+
+    @staticmethod
+    def _normalize_href(raw_url: str) -> str:
+        if not raw_url:
+            return raw_url
+        parsed = urlparse(raw_url)
+        if parsed.hostname in {"duckduckgo.com", "www.duckduckgo.com"} and parsed.path in {"/l/", "/l"}:
+            next_url = parse_qs(parsed.query).get("uddg", [None])[0]
+            if next_url:
+                return unquote(next_url)
+        return raw_url
+
+    @staticmethod
+    def _to_number_forms(phone_e164: str) -> list[str]:
+        local = phone_e164[3:] if phone_e164.startswith("+31") else phone_e164
+        if local:
+            local = f"0{local}"
+        spaced = local
+        if len(local) >= 10:
+            spaced = f"{local[:2]} {local[2:4]} {local[4:6]} {local[6:8]} {local[8:]}"
+        compact = local.replace(" ", "")
+        return [phone_e164, local, spaced, compact]
 
     @staticmethod
     def _extract_handle(domain: str, raw_url: str) -> str | None:
@@ -106,14 +129,16 @@ class DuckDuckGoSearchProvider(BasePhoneProvider):
         if not settings.ENABLE_DDG_SCRAPING:
             return []
 
-        queries = [f'"{phone_e164}"']
-        for domain in self.SOCIAL_DOMAINS:
-            queries.append(f'"{phone_e164}" site:{domain}')
+        number_forms = self._to_number_forms(phone_e164)
+        queries = [f'"{number}"' for number in number_forms[:2]]
+        for number in number_forms[:2]:
+            for domain in self.SOCIAL_DOMAINS:
+                queries.append(f'"{number}" site:{domain}')
 
         results: list[ProviderMatch] = []
         timeout = httpx.Timeout(settings.REQUEST_TIMEOUT_SECONDS)
 
-        for query in queries[:4]:
+        for query in queries[:10]:
             url = f"https://duckduckgo.com/html/?q={quote_plus(query)}"
             try:
                 async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
@@ -128,6 +153,7 @@ class DuckDuckGoSearchProvider(BasePhoneProvider):
 
             for link in items[: settings.DDG_MAX_RESULTS]:
                 href = link.get("href", "").strip()
+                href = self._normalize_href(href)
                 title = " ".join(link.get_text(" ", strip=True).split())
                 if not href or href in seen:
                     continue
@@ -140,14 +166,16 @@ class DuckDuckGoSearchProvider(BasePhoneProvider):
                 snippet = ""
                 if snippet_node:
                     snippet = " ".join(snippet_node.get_text(" ", strip=True).split())
-                matched = phone_e164 in title or phone_e164 in snippet
+
                 domain = self._clean_domain(href)
+                if not domain or domain in self.BANNED_DOMAINS:
+                    continue
+
+                matched = any(number in title or number in snippet for number in number_forms if number)
                 platform = PLATFORM_LABELS.get(domain) or domain
 
                 social_handle = self._extract_handle(domain, href)
-                identity_name = self._extract_name(title, domain)
-                if not identity_name:
-                    identity_name = title
+                identity_name = self._extract_name(title, domain) or title
 
                 results.append(
                     ProviderMatch(
@@ -166,7 +194,7 @@ class DuckDuckGoSearchProvider(BasePhoneProvider):
                             "domain": domain,
                             "source_tier": "indirect",
                         },
-                        raw={"href": href},
+                        raw={"href": href, "query": query},
                     )
                 )
         return results

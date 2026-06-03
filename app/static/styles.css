@@ -252,6 +252,15 @@ a {
   margin-top: 22px;
 }
 
+.hero-options {
+  margin-top: 12px;
+}
+
+.hero-options .toggle {
+  color: #ffffff;
+  font-size: 0.9rem;
+}
+
 .hero-chip {
   display: inline-flex;
   align-items: center;

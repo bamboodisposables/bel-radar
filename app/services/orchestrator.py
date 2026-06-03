@@ -48,13 +48,18 @@ def _to_orm_result(request_id: str, match: ProviderMatch) -> LookupResult:
     )
 
 
-async def run_lookup_with_store(db: Session, request: LookupRequest) -> list[LookupResult]:
+async def run_lookup_with_store(
+    db: Session,
+    request: LookupRequest,
+    *,
+    force_refresh: bool = False,
+) -> list[LookupResult]:
     phone_e164 = request.phone_e164
     matches: list[ProviderMatch] = []
     providers = get_providers()
 
     for provider in providers:
-        cached = get_cached_payload(db, phone_e164, provider.name)
+        cached = None if force_refresh else get_cached_payload(db, phone_e164, provider.name)
         provider_matches: list[ProviderMatch] = []
         if cached is not None:
             provider_matches = provider.from_cache_payload(cached)
@@ -84,10 +89,15 @@ async def run_lookup_with_store(db: Session, request: LookupRequest) -> list[Loo
     return results
 
 
-def create_lookup_request(db: Session, phone_raw: str) -> tuple[LookupRequest, bool, str]:
+def create_lookup_request(
+    db: Session,
+    phone_raw: str,
+    *,
+    force_refresh: bool = False,
+) -> tuple[LookupRequest, bool, str]:
     phone_e164 = normalize_phone(phone_raw)
     request = db.query(LookupRequest).filter_by(phone_e164=phone_e164).order_by(LookupRequest.created_at.desc()).first()
-    if request and request.status == "done":
+    if request and request.status == "done" and not force_refresh:
         created_new = False
     else:
         request = LookupRequest(
