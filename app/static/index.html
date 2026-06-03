@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bel Radar</title>
+    <script>
+      const assetBase = window.location.protocol === "file:" ? "." : "/static";
+      document.write(`<link rel="stylesheet" href="${assetBase}/styles.css">`);
+    </script>
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark"></span>
+          <div>
+            <p class="brand-kicker">Nederlandse nummerzoeker</p>
+            <h1>Bel Radar</h1>
+          </div>
+        </div>
+        <nav class="topnav">
+          <a href="#lookup">Zoeken</a>
+          <a href="#results">Resultaten</a>
+          <a href="#bulk">Bulk</a>
+        </nav>
+      </header>
+
+      <section class="hero" id="lookup">
+        <div class="hero-inner">
+          <p class="hero-mini">Omgekeerd nummer zoeken</p>
+          <h2>Who called me?</h2>
+          <p class="hero-copy">
+            Zoek direct naar publieke profielnamen, gebruikersnamen, organisaties en platformverwijzingen
+            op basis van een telefoonnummer.
+          </p>
+
+          <form id="singleForm" class="hero-search" autocomplete="off">
+            <input id="singlePhone" placeholder="bijv. 06 12 34 56 78" required />
+            <button type="submit" aria-label="Zoeken">Search</button>
+          </form>
+
+          <div class="hero-meta">
+            <span class="hero-chip" id="globalStatus" data-tone="idle">Systeem standby</span>
+            <span class="hero-chip">4 bronnen</span>
+            <span class="hero-chip">Live + cached</span>
+          </div>
+
+          <div class="runtime-hint" id="runtimeHint"></div>
+        </div>
+      </section>
+
+      <section class="strap">
+        <p>Check onbekende bellers, vind publieke matches en bekijk platformsporen vanuit een zoeklaag.</p>
+      </section>
+
+      <section class="content-grid">
+        <article class="panel panel-main" id="results">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Primaire lookup</p>
+              <h3>Resultaatoverzicht</h3>
+            </div>
+            <button type="button" class="ghost-button" id="singleClear">Leegmaken</button>
+          </div>
+
+          <div id="singleResult" class="summary-box muted-empty">
+            Status idle
+            <span class="soft-row">Nog geen actieve lookup.</span>
+          </div>
+
+          <div class="result-toolbar">
+            <span class="toolbar-pill" id="kpiMatches">0 matches</span>
+            <span class="toolbar-pill" id="kpiHigh">0 high confidence</span>
+            <span class="toolbar-pill" id="resultStamp">waiting...</span>
+          </div>
+
+          <div id="singleResultLayer" class="result-layer muted-empty">
+            <span class="empty-label">Geen resultaten geladen.</span>
+          </div>
+        </article>
+
+        <aside class="side-stack" id="bulk">
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+              <p class="panel-kicker">Batchmodus</p>
+              <h3>Bulk zoeken</h3>
+              </div>
+            </div>
+
+            <form id="bulkForm" class="stack-form">
+              <textarea id="bulkPhones" rows="8" placeholder="06 12 34 56 78&#10;0031 6 11 22 33 44"></textarea>
+              <div class="bulk-actions">
+                <label class="toggle"><input type="checkbox" id="bulkAsync" checked /> Asynchroon</label>
+                <button type="submit">Start batch</button>
+              </div>
+            </form>
+
+            <div id="bulkResult" class="summary-box muted-empty">Nog geen batch actief.</div>
+            <div class="progress-wrap">
+              <div class="progress-track">
+                <span id="bulkProgressBar" class="progress-fill" style="width: 0%"></span>
+              </div>
+              <p id="bulkProgressText">0 / 0</p>
+            </div>
+            <div id="jobStatus" class="summary-box muted-empty">Geen actieve queue.</div>
+          </article>
+
+          <article class="panel info-panel">
+            <p class="panel-kicker">Live Sources</p>
+            <h3>Search Footprint</h3>
+            <ul class="source-list">
+              <li><span>DuckDuckGo</span><strong>publieke zoeklaag</strong></li>
+              <li><span>SerpAPI</span><strong>json-bron</strong></li>
+              <li><span>Numverify</span><strong>carrierdata</strong></li>
+              <li><span>Phonenumbers</span><strong>regiometadata</strong></li>
+            </ul>
+          </article>
+        </aside>
+      </section>
+    </main>
+
+    <script>
+      const script = document.createElement("script");
+      script.src = `${assetBase}/app.js`;
+      document.body.appendChild(script);
+    </script>
+  </body>
+</html>

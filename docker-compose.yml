@@ -1,0 +1,13 @@
+services:
+  callerid:
+    build: .
+    container_name: callerid-platform
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./:/app
+      - callerid-data:/app/data
+volumes:
+  callerid-data:

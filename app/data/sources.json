@@ -1,0 +1,34 @@
+{
+  "sources": [
+    {
+      "key": "phonenumbers_metadata",
+      "name": "Phonenumbers metadata",
+      "type": "local",
+      "cost": "gratis",
+      "latency": "snel",
+      "fields": ["country_code", "carrier", "timezone", "location", "line_type"]
+    },
+    {
+      "key": "numverify",
+      "name": "NumVerify API",
+      "type": "remote_api",
+      "requires": "NUMVERIFY_API_KEY",
+      "cost": "betaald of trial",
+      "latency": "1-2s",
+      "fields": ["valid", "location", "country_name", "carrier", "line_type"]
+    },
+    {
+      "key": "duckduckgo_search",
+      "name": "DuckDuckGo search",
+      "type": "public_html",
+      "requires": "geen sleutel",
+      "cost": "gratis",
+      "latency": "2-5s",
+      "fields": ["source", "title", "snippet", "social_url", "evidence"]
+    }
+  ],
+  "update_policy": {
+    "cache_ttl_seconds_default": 86400,
+    "bulk_max_items_default": 150
+  }
+}
