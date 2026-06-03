@@ -23,6 +23,7 @@ const sourceLabels = {
   numverify: "Numverify API",
   serpapi: "SerpAPI",
   duckduckgo_search: "DuckDuckGo",
+  directory_sites: "Directory & Bedrijfsdata",
 };
 const matchTypeLabels = {
   exact: "Directe match",

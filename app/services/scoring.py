@@ -5,6 +5,7 @@ BASE_SOURCE_WEIGHT = {
     "phonenumbers_metadata": 0.25,
     "numverify": 0.35,
     "duckduckgo_search": 0.74,
+    "directory_sites": 0.66,
 }
 
 
