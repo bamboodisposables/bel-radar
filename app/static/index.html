@@ -15,7 +15,7 @@
         <div class="brand">
           <span class="brand-mark"></span>
           <div>
-            <p class="brand-kicker">Nederlandse nummerzoeker</p>
+            <p class="brand-kicker">Nummerherkomst opzoeken</p>
             <h1>Bel Radar</h1>
           </div>
         </div>
@@ -31,8 +31,8 @@
           <p class="hero-mini">Nummer terugzoeken</p>
           <h2>Van wie is dit nummer?</h2>
           <p class="hero-copy">
-            Doorzoek publieke profielen, gebruikersnamen, organisaties en platformvermeldingen
-            die aan een telefoonnummer te koppelen zijn.
+            Doorzoek publieke profielen, gebruikersnamen, bedrijfsvermeldingen en
+            platformsignalen die aan een telefoonnummer zijn gekoppeld.
           </p>
 
           <form id="singleForm" class="hero-search" autocomplete="off">
@@ -41,9 +41,9 @@
           </form>
 
           <div class="hero-meta">
-            <span class="hero-chip" id="globalStatus" data-tone="idle">Systeem standby</span>
-            <span class="hero-chip">4 live databronnen</span>
-            <span class="hero-chip">Met cachelaag</span>
+            <span class="hero-chip" id="globalStatus" data-tone="idle">Systeem klaar</span>
+            <span class="hero-chip">4 live bronnen</span>
+            <span class="hero-chip">Cache actief</span>
           </div>
 
           <div class="runtime-hint" id="runtimeHint"></div>
@@ -51,7 +51,7 @@
       </section>
 
       <section class="strap">
-        <p>Controleer onbekende bellers, vind publieke sporen en bekijk mogelijke profielen in één zoekslag.</p>
+        <p>Vroeg onbekende bellers? Vind direct het publieke spoor en controleer de herkomst.</p>
       </section>
 
       <section class="content-grid">
@@ -61,22 +61,22 @@
               <p class="panel-kicker">Direct zoeken</p>
               <h3>Resultaatoverzicht</h3>
             </div>
-            <button type="button" class="ghost-button" id="singleClear">Leegmaken</button>
+            <button type="button" class="ghost-button" id="singleClear">Wissen</button>
           </div>
 
           <div id="singleResult" class="summary-box muted-empty">
-            Status standby
-            <span class="soft-row">Nog geen zoekopdracht uitgevoerd.</span>
+            Systeem klaar
+            <span class="soft-row">Nog geen scan uitgevoerd.</span>
           </div>
 
           <div class="result-toolbar">
-            <span class="toolbar-pill" id="kpiMatches">0 treffers</span>
-            <span class="toolbar-pill" id="kpiHigh">0 sterke matches</span>
+            <span class="toolbar-pill" id="kpiMatches">0 resultaten</span>
+            <span class="toolbar-pill" id="kpiHigh">0 betrouwbare treffers</span>
             <span class="toolbar-pill" id="resultStamp">klaar voor zoeken</span>
           </div>
 
           <div id="singleResultLayer" class="result-layer muted-empty">
-            <span class="empty-label">Geen resultaten geladen.</span>
+            <span class="empty-label">Geen resultaten weergegeven.</span>
           </div>
         </article>
 
@@ -85,7 +85,7 @@
             <div class="panel-head">
               <div>
               <p class="panel-kicker">Meerdere nummers</p>
-              <h3>Bulkzoekopdracht</h3>
+              <h3>Bulk scan</h3>
               </div>
             </div>
 
@@ -93,28 +93,28 @@
               <textarea id="bulkPhones" rows="8" placeholder="06 12 34 56 78&#10;0031 6 11 22 33 44"></textarea>
               <div class="bulk-actions">
                 <label class="toggle"><input type="checkbox" id="bulkAsync" checked /> Asynchroon</label>
-                <button type="submit">Start batch</button>
+                <button type="submit">Start batchscan</button>
               </div>
             </form>
 
-            <div id="bulkResult" class="summary-box muted-empty">Nog geen bulkzoekopdracht actief.</div>
+            <div id="bulkResult" class="summary-box muted-empty">Nog geen batch actief.</div>
             <div class="progress-wrap">
               <div class="progress-track">
                 <span id="bulkProgressBar" class="progress-fill" style="width: 0%"></span>
               </div>
-              <p id="bulkProgressText">0 / 0</p>
+              <p id="bulkProgressText">0 / 0 voltooide regels</p>
             </div>
-            <div id="jobStatus" class="summary-box muted-empty">Nog geen actieve wachtrij.</div>
+            <div id="jobStatus" class="summary-box muted-empty">Geen actieve taak.</div>
           </article>
 
           <article class="panel info-panel">
             <p class="panel-kicker">Actieve bronnen</p>
             <h3>Bronoverzicht</h3>
             <ul class="source-list">
-              <li><span>DuckDuckGo</span><strong>publieke zoeklaag</strong></li>
-              <li><span>SerpAPI</span><strong>json-bron</strong></li>
-              <li><span>Numverify</span><strong>carrierdata</strong></li>
-              <li><span>Phonenumbers</span><strong>regiometadata</strong></li>
+              <li><span>DuckDuckGo</span><strong>openbare zoekbron</strong></li>
+              <li><span>SerpAPI</span><strong>webzoek-API</strong></li>
+              <li><span>Numverify</span><strong>telecommetadata</strong></li>
+              <li><span>Phonenumbers</span><strong>nummermetadata</strong></li>
             </ul>
           </article>
         </aside>

@@ -20,18 +20,18 @@ const jobStatus = document.getElementById("jobStatus");
 const apiEnabled = window.location.protocol !== "file:";
 const sourceLabels = {
   phonenumbers_metadata: "Telefoonmetadata",
-  numverify: "Numverify",
+  numverify: "Numverify API",
   serpapi: "SerpAPI",
   duckduckgo_search: "DuckDuckGo",
 };
 const matchTypeLabels = {
   exact: "Directe match",
-  context: "Contextmatch",
-  inconclusive: "Aanwijzing",
+  context: "Contextsignaal",
+  inconclusive: "Voorzichtig signaal",
 };
 const statusLabels = {
-  queued: "In wachtrij",
-  running: "Bezig",
+  queued: "In de wachtrij",
+  running: "Verwerken",
   done: "Voltooid",
   completed: "Voltooid",
   error: "Mislukt",
@@ -59,7 +59,7 @@ function escapeAttr(value) {
 }
 
 function confidenceLabel(value) {
-  return `${(Number(value || 0) * 100).toFixed(1)}% betrouwbaarheid`;
+  return `Betrouwbaarheid: ${(Number(value || 0) * 100).toFixed(1)}%`;
 }
 
 function confidenceClass(value, matchType) {
@@ -72,8 +72,8 @@ function confidenceClass(value, matchType) {
 function updateCounts(results) {
   const matchCount = results.length;
   const highConfidenceCount = results.filter((item) => Number(item.confidence || 0) >= 0.75).length;
-  kpiMatches.textContent = `${matchCount} treffers`;
-  kpiHigh.textContent = `${highConfidenceCount} sterke treffers`;
+  kpiMatches.textContent = `${matchCount} resultaten`;
+  kpiHigh.textContent = `${highConfidenceCount} betrouwbare treffers`;
 }
 
 function translateStatus(status) {
@@ -85,7 +85,7 @@ function translateSource(source) {
 }
 
 function translateMatchType(matchType) {
-  return matchTypeLabels[matchType] || matchType || "Aanwijzing";
+  return matchTypeLabels[matchType] || matchType || "Voorzichtig signaal";
 }
 
 function renderSummary(text, target) {
@@ -150,16 +150,16 @@ function renderMatches(results, stamp) {
 }
 
 function resetSingleView() {
-  renderSummary("Status standby\nNog geen zoekopdracht uitgevoerd.", singleResult);
-  renderEmptyResults("Geen resultaten geladen.");
-  kpiMatches.textContent = "0 treffers";
-  kpiHigh.textContent = "0 sterke matches";
-  resultStamp.textContent = "klaar voor zoeken";
+  renderSummary("Systeem klaar\nNog geen scan uitgevoerd.", singleResult);
+  renderEmptyResults("Geen resultaten weergegeven.");
+  kpiMatches.textContent = "0 resultaten";
+  kpiHigh.textContent = "0 betrouwbare treffers";
+  resultStamp.textContent = "klaar voor scan";
 }
 
 async function runSingleLookup(phoneNumber) {
-  setStatus("Zoeken", "busy");
-  renderSummary("Zoekopdracht gestart...\nBel Radar zoekt nu naar publieke signalen.", singleResult);
+  setStatus("Scan gestart", "busy");
+  renderSummary("Zoekopdracht gestart...\nBel Radar verzamelt publieke signalen.", singleResult);
   renderEmptyResults("Resultaten worden geladen...");
 
   const response = await fetch("/api/v1/lookup", {
@@ -170,7 +170,7 @@ async function runSingleLookup(phoneNumber) {
   const payload = await response.json();
 
   if (!response.ok) {
-    setStatus("Zoeken mislukt", "err");
+    setStatus("Zoekopdracht mislukt", "err");
     renderSummary(`Fout: ${payload.detail || "onbekend"}`, singleResult);
     renderEmptyResults("De zoekopdracht kon niet worden voltooid.");
     return;
@@ -181,19 +181,19 @@ async function runSingleLookup(phoneNumber) {
       `Status: ${translateStatus(payload.status)}`,
       `Zoek-ID: ${payload.request_id}`,
       `Internationaal formaat: ${payload.phone_e164}`,
-      `Gevonden treffers: ${payload.results.length}`,
+      `Gevonden resultaten: ${payload.results.length}`,
     ].join("\n"),
     singleResult,
   );
   renderMatches(payload.results || [], `laatste scan · ${payload.phone_e164}`);
-  setStatus("Zoeken klaar", "ok");
+  setStatus("Scan klaar", "ok");
 }
 
 async function pollJob(jobId) {
   const response = await fetch(`/api/v1/jobs/${jobId}`);
   if (!response.ok) {
     setStatus("Batch mislukt", "err");
-    renderSummary("Job niet gevonden.", jobStatus);
+    renderSummary("Taak niet gevonden.", jobStatus);
     return;
   }
 
@@ -201,12 +201,12 @@ async function pollJob(jobId) {
   const percent = Math.max(0, Math.min(100, Number(payload.percent || 0)));
 
   bulkProgressBar.style.width = `${percent}%`;
-  bulkProgressText.textContent = `${payload.processed_items} / ${payload.total_items}`;
+  bulkProgressText.textContent = `${payload.processed_items} / ${payload.total_items} voltooide regels`;
   renderSummary(
     [
       `Status: ${translateStatus(payload.status)}`,
       `Voortgang: ${payload.processed_items}/${payload.total_items} (${payload.percent}%)`,
-      `Foutmelding: ${payload.error || "-"}`,
+      `Fout: ${payload.error || "-"}`,
       "",
       ...payload.items.map((item) => `${item.row_index}. ${item.phone_raw} -> ${translateStatus(item.status)}`),
     ].join("\n"),
@@ -233,14 +233,14 @@ singleForm.addEventListener("submit", async (event) => {
 
   if (!phoneNumber) {
     setStatus("Invoer ontbreekt", "err");
-    renderSummary("Voer eerst een telefoonnummer in.", singleResult);
+    renderSummary("Vul eerst een telefoonnummer in.", singleResult);
     return;
   }
 
   if (!apiEnabled) {
     setStatus("Previewmodus", "busy");
-    renderSummary("Ontwerpvoorbeeld actief.\nOpen http://127.0.0.1:8000 voor live zoeken.", singleResult);
-    renderEmptyResults("De live API is niet beschikbaar in bestandsvoorbeeld.");
+    renderSummary("Voorbeeldmodus actief.\nOpen http://127.0.0.1:8000 voor live zoeken.", singleResult);
+    renderEmptyResults("De live API is niet beschikbaar in bestandsmodus.");
     return;
   }
 
@@ -258,21 +258,21 @@ bulkForm.addEventListener("submit", async (event) => {
 
   if (!numbers.length) {
     setStatus("Batchinvoer ontbreekt", "err");
-    renderSummary("Voer minimaal één nummer in.", bulkResult);
+    renderSummary("Voer minimaal één geldig nummer in.", bulkResult);
     return;
   }
 
   if (!apiEnabled) {
     setStatus("Previewmodus", "busy");
-    renderSummary("Bulkvoorbeeld actief.\nOpen http://127.0.0.1:8000 voor echte batchtaken.", bulkResult);
+    renderSummary("Previewmodus actief.\nOpen http://127.0.0.1:8000 voor batchjobs.", bulkResult);
     return;
   }
 
   setStatus("Batch gestart", "busy");
   bulkProgressBar.style.width = "0%";
-  bulkProgressText.textContent = "0 / 0";
-  renderSummary("Bulkzoekopdracht wordt gestart...", bulkResult);
-  renderSummary("Geen actieve wachtrij.", jobStatus);
+  bulkProgressText.textContent = "0 / 0 voltooide regels";
+  renderSummary("Batchscan wordt gestart...", bulkResult);
+  renderSummary("Geen actieve taak.", jobStatus);
 
   const response = await fetch("/api/v1/lookup/bulk", {
     method: "POST",
@@ -288,13 +288,13 @@ bulkForm.addEventListener("submit", async (event) => {
   }
 
   if (payload.job_id) {
-    renderSummary(`Asynchrone bulkzoekopdracht gestart: ${payload.job_id}`, bulkResult);
+    renderSummary(`Asynchrone batchscan gestart: ${payload.job_id}`, bulkResult);
     pollJob(payload.job_id);
     return;
   }
 
   bulkProgressBar.style.width = "100%";
-  bulkProgressText.textContent = `${payload.request_count} / ${payload.request_count}`;
+  bulkProgressText.textContent = `${payload.request_count} / ${payload.request_count} voltooide regels`;
   setStatus("Batch klaar", "ok");
   renderSummary(`Synchrone batch voltooid: ${payload.request_count} nummers`, bulkResult);
 });
@@ -303,12 +303,12 @@ if (!apiEnabled) {
   runtimeHint.textContent = "Voorbeeldmodus via file://. Open http://127.0.0.1:8000 voor live zoekopdrachten.";
   setStatus("Previewmodus", "busy");
 } else {
-  runtimeHint.textContent = "Live modus actief. Resultaten worden direct uit de API en publieke bronnen geladen.";
+  runtimeHint.textContent = "Live modus actief. Resultaten komen direct uit de API en openbare bronnen.";
 }
 
 resetSingleView();
 if (!apiEnabled) {
   setStatus("Previewmodus", "busy");
 } else {
-  setStatus("Systeem standby", "idle");
+  setStatus("Systeem klaar", "idle");
 }
