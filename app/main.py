@@ -84,6 +84,8 @@ def sources() -> list[dict[str, str]]:
         {"key": "phonenumbers_metadata", "name": "Telefoonmetadata", "status": "gratis"},
         {"key": "numverify", "name": "Numverify API", "status": "API-sleutel vereist"},
         {"key": "serpapi", "name": "SerpAPI", "status": "API-sleutel vereist"},
+        {"key": "kvk_api", "name": "KVK API", "status": "API-sleutel vereist"},
+        {"key": "kvk_public", "name": "KvK publieke zoekresultaten", "status": "publiek internet"},
         {"key": "duckduckgo_search", "name": "DuckDuckGo zoekresultaten", "status": "publiek internet"},
         {"key": "directory_nl", "name": "Nederlandse directories", "status": "publiek internet"},
         {"key": "directory_sites", "name": "Directory & Bedrijfsdata", "status": "publiek internet"},

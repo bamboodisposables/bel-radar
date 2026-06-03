@@ -23,8 +23,15 @@ const sourceLabels = {
   numverify: "Numverify API",
   serpapi: "SerpAPI",
   duckduckgo_search: "DuckDuckGo",
+  kvk_api: "KVK API",
+  kvk_public: "KVK Publiek",
   directory_nl: "Nederlandse directories",
   directory_sites: "Directory & Bedrijfsdata",
+};
+const trustLabels = {
+  officieel: "Officieel",
+  openbaar: "Openbaar",
+  indirect: "Indicatief",
 };
 const matchTypeLabels = {
   exact: "Directe match",
@@ -90,6 +97,14 @@ function translateMatchType(matchType) {
   return matchTypeLabels[matchType] || matchType || "Voorzichtig signaal";
 }
 
+function translateTrust(sourceTier) {
+  return trustLabels[sourceTier] || "Indicatief";
+}
+
+function trustClass(sourceTier) {
+  return sourceTier === "officieel" ? "official" : sourceTier === "openbaar" ? "public" : "indirect";
+}
+
 function renderSummary(text, target) {
   target.className = "summary-box";
   target.textContent = text;
@@ -113,6 +128,7 @@ function renderMatches(results, stamp) {
       const platform = escapeHtml(item.platform || translateSource(item.source) || "Onbekend platform");
       const source = escapeHtml(translateSource(item.source));
       const matchType = escapeHtml(translateMatchType(item.match_type));
+      const trustTier = item?.details?.source_tier || "indirect";
       const name = escapeHtml(item.name || "Onbekend");
       const handle = escapeHtml(item.account_handle || "-");
       const organization = escapeHtml(item.organization || "-");
@@ -128,6 +144,7 @@ function renderMatches(results, stamp) {
             <div class="match-tags">
               <span class="tag platform">${platform}</span>
               <span class="tag">${source}</span>
+              <span class="tag trust-tag trust-${trustClass(trustTier)}">${translateTrust(trustTier)}</span>
               <span class="tag">${matchType}</span>
             </div>
             <span class="tag score-tag ${confidenceClass(item.confidence, item.match_type)}">${confidenceLabel(item.confidence)}</span>

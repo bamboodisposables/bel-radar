@@ -7,6 +7,14 @@ BASE_SOURCE_WEIGHT = {
     "duckduckgo_search": 0.74,
     "directory_sites": 0.66,
     "directory_nl": 0.82,
+    "kvk_api": 0.92,
+    "kvk_public": 0.78,
+}
+
+SOURCE_TRUST_BONUS = {
+    "officieel": 0.12,
+    "openbaar": 0.05,
+    "indirect": 0.0,
 }
 
 
@@ -22,6 +30,8 @@ def score_match(match: ProviderMatch, phone_e164: str) -> float:
         score += 0.05
     if match.organization:
         score += 0.05
+    source_tier = (match.details or {}).get("source_tier")
+    score += SOURCE_TRUST_BONUS.get(source_tier, 0.0)
     if phone_e164.replace("+", "") in (match.name or ""):
         score -= 0.1
     return min(max(round(score, 3), 0.0), 1.0)

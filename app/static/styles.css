@@ -455,6 +455,30 @@ a {
   color: #ffffff;
 }
 
+.tag.trust-tag {
+  color: #28404b;
+  border-color: #c8d7e0;
+  background: #eaf3f7;
+}
+
+.tag.trust-tag.official {
+  background: #daf3de;
+  color: #1d6b3f;
+  border-color: #95d39f;
+}
+
+.tag.trust-tag.public {
+  background: #edf4de;
+  color: #5b6432;
+  border-color: #b9c892;
+}
+
+.tag.trust-tag.indirect {
+  background: #f1ebf6;
+  color: #5c4571;
+  border-color: #c7b4dd;
+}
+
 .score-tag {
   min-width: 120px;
   text-align: center;
