@@ -18,6 +18,24 @@ const bulkProgressText = document.getElementById("bulkProgressText");
 const jobStatus = document.getElementById("jobStatus");
 
 const apiEnabled = window.location.protocol !== "file:";
+const sourceLabels = {
+  phonenumbers_metadata: "Telefoonmetadata",
+  numverify: "Numverify",
+  serpapi: "SerpAPI",
+  duckduckgo_search: "DuckDuckGo",
+};
+const matchTypeLabels = {
+  exact: "Directe match",
+  context: "Contextmatch",
+  inconclusive: "Aanwijzing",
+};
+const statusLabels = {
+  queued: "In wachtrij",
+  running: "Bezig",
+  done: "Voltooid",
+  completed: "Voltooid",
+  error: "Mislukt",
+};
 
 function setStatus(text, tone) {
   globalStatus.textContent = text;
@@ -41,7 +59,7 @@ function escapeAttr(value) {
 }
 
 function confidenceLabel(value) {
-  return `${(Number(value || 0) * 100).toFixed(1)}% vertrouwen`;
+  return `${(Number(value || 0) * 100).toFixed(1)}% betrouwbaarheid`;
 }
 
 function confidenceClass(value, matchType) {
@@ -55,7 +73,19 @@ function updateCounts(results) {
   const matchCount = results.length;
   const highConfidenceCount = results.filter((item) => Number(item.confidence || 0) >= 0.75).length;
   kpiMatches.textContent = `${matchCount} treffers`;
-  kpiHigh.textContent = `${highConfidenceCount} sterke matches`;
+  kpiHigh.textContent = `${highConfidenceCount} sterke treffers`;
+}
+
+function translateStatus(status) {
+  return statusLabels[status] || status || "-";
+}
+
+function translateSource(source) {
+  return sourceLabels[source] || source || "Onbekende bron";
+}
+
+function translateMatchType(matchType) {
+  return matchTypeLabels[matchType] || matchType || "Aanwijzing";
 }
 
 function renderSummary(text, target) {
@@ -78,9 +108,9 @@ function renderMatches(results, stamp) {
 
   const cards = results
     .map((item) => {
-      const platform = escapeHtml(item.platform || item.source || "Onbekend platform");
-      const source = escapeHtml(item.source || "Onbekende bron");
-      const matchType = escapeHtml(item.match_type || "context");
+      const platform = escapeHtml(item.platform || translateSource(item.source) || "Onbekend platform");
+      const source = escapeHtml(translateSource(item.source));
+      const matchType = escapeHtml(translateMatchType(item.match_type));
       const name = escapeHtml(item.name || "Onbekend");
       const handle = escapeHtml(item.account_handle || "-");
       const organization = escapeHtml(item.organization || "-");
@@ -105,7 +135,7 @@ function renderMatches(results, stamp) {
             <strong>Gebruikersnaam</strong><span>${handle}</span>
             <strong>Organisatie</strong><span>${organization}</span>
             <strong>Locatie</strong><span>${location}</span>
-            <strong>Profiel- of bronlink</strong><span>${url}</span>
+            <strong>Link</strong><span>${url}</span>
             <strong>Bewijs</strong><span>${evidence}</span>
           </div>
         </article>
@@ -148,9 +178,9 @@ async function runSingleLookup(phoneNumber) {
 
   renderSummary(
     [
-      `Status: ${payload.status}`,
-      `Request ID: ${payload.request_id}`,
-      `E164: ${payload.phone_e164}`,
+      `Status: ${translateStatus(payload.status)}`,
+      `Zoek-ID: ${payload.request_id}`,
+      `Internationaal formaat: ${payload.phone_e164}`,
       `Gevonden treffers: ${payload.results.length}`,
     ].join("\n"),
     singleResult,
@@ -174,11 +204,11 @@ async function pollJob(jobId) {
   bulkProgressText.textContent = `${payload.processed_items} / ${payload.total_items}`;
   renderSummary(
     [
-      `Status: ${payload.status}`,
+      `Status: ${translateStatus(payload.status)}`,
       `Voortgang: ${payload.processed_items}/${payload.total_items} (${payload.percent}%)`,
       `Foutmelding: ${payload.error || "-"}`,
       "",
-      ...payload.items.map((item) => `${item.row_index}. ${item.phone_raw} -> ${item.status}`),
+      ...payload.items.map((item) => `${item.row_index}. ${item.phone_raw} -> ${translateStatus(item.status)}`),
     ].join("\n"),
     jobStatus,
   );
@@ -241,7 +271,7 @@ bulkForm.addEventListener("submit", async (event) => {
   setStatus("Batch gestart", "busy");
   bulkProgressBar.style.width = "0%";
   bulkProgressText.textContent = "0 / 0";
-  renderSummary("Zoekbatch wordt gestart...", bulkResult);
+  renderSummary("Bulkzoekopdracht wordt gestart...", bulkResult);
   renderSummary("Geen actieve wachtrij.", jobStatus);
 
   const response = await fetch("/api/v1/lookup/bulk", {
@@ -258,7 +288,7 @@ bulkForm.addEventListener("submit", async (event) => {
   }
 
   if (payload.job_id) {
-    renderSummary(`Asynchrone batch gestart: ${payload.job_id}`, bulkResult);
+    renderSummary(`Asynchrone bulkzoekopdracht gestart: ${payload.job_id}`, bulkResult);
     pollJob(payload.job_id);
     return;
   }
