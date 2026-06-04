@@ -3,7 +3,7 @@ from app.providers.base import ProviderMatch
 BASE_SOURCE_WEIGHT = {
     "phonenumbers_metadata": 0.28,
     "numverify": 0.35,
-    "serpapi": 0.7,
+    "serpapi": 0.84,
     "duckduckgo_search": 0.67,
     "duckduckgo": 0.67,
     "directory_sites": 0.62,
@@ -16,6 +16,24 @@ BASE_SOURCE_WEIGHT = {
     "hunter_lookup": 0.8,
     "social_hints": 0.32,
     "social_platform_hints": 0.32,
+}
+
+SOURCE_PRIORITY = {
+    "serpapi": 100,
+    "kvk_api": 95,
+    "kvk_public": 88,
+    "directory_nl": 82,
+    "directory_sites": 78,
+    "duckduckgo_search": 72,
+    "duckduckgo": 72,
+    "twilio_lookup": 68,
+    "numlookup_api": 66,
+    "clearbit_lookup": 64,
+    "hunter_lookup": 62,
+    "numverify": 54,
+    "phonenumbers_metadata": 48,
+    "social_hints": 32,
+    "social_platform_hints": 32,
 }
 
 SOURCE_TRUST_BONUS = {
@@ -66,3 +84,7 @@ def score_multisource(confidence: float, source_count: int) -> float:
         bonus = SOURCE_SIGNAL_BONUS_BY_SOURCES.get(source_count, 0.2)
         confidence = confidence + bonus
     return min(max(round(confidence, 3), 0.0), 1.0)
+
+
+def source_priority_rank(source: str | None) -> int:
+    return SOURCE_PRIORITY.get(source or "", 0)

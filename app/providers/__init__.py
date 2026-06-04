@@ -15,19 +15,45 @@ from app.providers.search_social_hints import SocialHintProvider
 from app.providers.search_ddg import DuckDuckGoSearchProvider
 
 
-def get_providers():
-    return [
+def get_providers(route: str = "business"):
+    route = (route or "business").lower()
+
+    core = [
         TelecomMetadataProvider(),
+        NumverifyProvider(),
+    ]
+
+    business = [
         SerpApiProvider(),
         KvkApiProvider(),
         KvkPublicProvider(),
-        NumverifyProvider(),
+        DutchDirectoryProvider(),
+        DirectorySearchProvider(),
+        DuckDuckGoSearchProvider(),
+        SocialHintProvider(),
         TwilioLookupProvider(),
         NumlookupApiProvider(),
         ClearbitLookupProvider(),
         HunterLookupProvider(),
+    ]
+
+    reputation = [
+        SerpApiProvider(),
+        DuckDuckGoSearchProvider(),
+        SocialHintProvider(),
+        KvkPublicProvider(),
         DutchDirectoryProvider(),
         DirectorySearchProvider(),
-        SocialHintProvider(),
-        DuckDuckGoSearchProvider(),
+        TwilioLookupProvider(),
+        NumlookupApiProvider(),
+        ClearbitLookupProvider(),
+        HunterLookupProvider(),
     ]
+
+    if route == "spam":
+        return core + reputation
+
+    if route in {"consent", "dashboard"}:
+        return core
+
+    return core + business

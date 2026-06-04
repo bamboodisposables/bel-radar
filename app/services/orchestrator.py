@@ -18,7 +18,7 @@ from app.providers import get_providers
 from app.providers.base import ProviderMatch
 from app.services.cache import get_cached_payload, set_cached_payload
 from app.services.normalizer import normalize_phone
-from app.services.scoring import score_match, score_multisource
+from app.services.scoring import score_match, score_multisource, source_priority_rank
 
 _BUSINESS_SOURCES = {
     "kvk_api",
@@ -276,7 +276,11 @@ def _aggregate_multisource(matches: Iterable[ProviderMatch]) -> list[ProviderMat
     grouped: list[ProviderMatch] = []
 
     for bucket in groups.values():
-        ordered = sorted(bucket, key=lambda item: item.confidence, reverse=True)
+        ordered = sorted(
+            bucket,
+            key=lambda item: (item.confidence, source_priority_rank(item.source), item.match_type == "exact"),
+            reverse=True,
+        )
         if not ordered:
             continue
 
@@ -558,7 +562,11 @@ async def run_lookup_with_store(
     aggregated = _aggregate_multisource(deduped)
     if route == "spam":
         aggregated = [_build_reputation_summary(phone_e164, deduped)] + aggregated[:4]
-    aggregated_sorted = sorted(aggregated, key=lambda match: match.confidence, reverse=True)
+    aggregated_sorted = sorted(
+        aggregated,
+        key=lambda match: (match.confidence, source_priority_rank(match.source), match.match_type == "exact"),
+        reverse=True,
+    )
 
     results = [_to_orm_result(request.id, match) for match in aggregated_sorted]
 
