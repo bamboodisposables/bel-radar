@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 from collections.abc import Iterable
 from datetime import datetime, timezone
@@ -11,12 +12,35 @@ import uuid
 
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models import LookupRequest, LookupResult, SourceRuntimeMetric
 from app.providers import get_providers
 from app.providers.base import ProviderMatch
 from app.services.cache import get_cached_payload, set_cached_payload
 from app.services.normalizer import normalize_phone
 from app.services.scoring import score_match, score_multisource
+
+_BUSINESS_SOURCES = {
+    "kvk_api",
+    "kvk_public",
+    "directory_nl",
+    "directory_sites",
+    "duckduckgo_search",
+    "serpapi",
+    "twilio_lookup",
+    "numlookup_api",
+    "clearbit_lookup",
+    "hunter_lookup",
+    "social_hints",
+}
+
+_REPUTATION_SOURCES = {
+    "phonenumbers_metadata",
+    "numverify",
+    "duckduckgo_search",
+    "serpapi",
+    "social_hints",
+}
 
 _NOISE_TOKENS = {
     "search",
@@ -287,8 +311,9 @@ def _aggregate_multisource(matches: Iterable[ProviderMatch]) -> list[ProviderMat
             if not primary.location and item.location:
                 primary.location = item.location
 
-        max_signal_tier = max((_extract_signal_tier(primary.details, (primary.details or {}).get("source_tier")), *[x.get("signal_tier", "indirect") for x in source_stack], key=_normalize_signal_tier)
-        signal_tier = max_signal_tier
+        source_tiers = [_extract_signal_tier(primary.details, (primary.details or {}).get("source_tier"))]
+        source_tiers.extend(x.get("signal_tier", "indirect") for x in source_stack)
+        signal_tier = max(source_tiers, key=_normalize_signal_tier)
 
         details = dict(primary.details or {})
         details.update(
@@ -308,6 +333,70 @@ def _aggregate_multisource(matches: Iterable[ProviderMatch]) -> list[ProviderMat
         grouped.append(primary)
 
     return grouped
+
+
+def _build_reputation_summary(phone_e164: str, matches: list[ProviderMatch]) -> ProviderMatch:
+    sources = {match.source for match in matches if match.source}
+    business_hits = [match for match in matches if (match.source or "") in _BUSINESS_SOURCES and match.match_type == "exact"]
+    public_hits = [match for match in matches if (match.source or "") in _REPUTATION_SOURCES and match.match_type != "inconclusive"]
+    exact_name_hits = [match for match in matches if match.match_type == "exact" and (match.name or match.organization)]
+    mobile = phone_e164.startswith("+31") and phone_e164.replace("+31", "", 1).startswith("6")
+
+    score = 0.22
+    reasons: list[str] = []
+    if mobile:
+        score += 0.1
+        reasons.append("Mobiel NL-nummer")
+    if not business_hits:
+        score += 0.22
+        reasons.append("Geen zakelijke exacte match")
+    if len(sources - {"phonenumbers_metadata"}) <= 1:
+        score += 0.2
+        reasons.append("Beperkte openbare footprint")
+    if public_hits:
+        score += min(0.08 * len(public_hits), 0.16)
+        reasons.append(f"{len(public_hits)} openbare reputatiesignaal(s)")
+    if exact_name_hits:
+        score -= 0.14
+        reasons.append("Zakelijke naam of organisatie gevonden")
+    if any(match.source == "kvk_api" for match in matches):
+        score -= 0.15
+        reasons.append("Officiële KvK-match aanwezig")
+    if any(match.source == "kvk_public" for match in matches):
+        score -= 0.08
+        reasons.append("Publieke KvK-vermelding gevonden")
+
+    score = min(max(round(score, 3), 0.0), 1.0)
+    if score >= 0.7:
+        label = "Hoger reputatierisico"
+    elif score >= 0.45:
+        label = "Gemengd reputatiesignaal"
+    else:
+        label = "Laag reputatierisico"
+
+    details = {
+        "route": "spam",
+        "risk_score": score,
+        "risk_label": label,
+        "source_count": len(sources),
+        "official_hit_count": len([m for m in matches if m.source in {"kvk_api", "kvk_public"}]),
+        "public_hit_count": len(public_hits),
+        "source_tier": "indirect",
+        "signal_tier": "indirect",
+        "observed_sources": sorted(sources),
+    }
+
+    return ProviderMatch(
+        source="reputation_model",
+        platform="Spamcontrole",
+        match_type="context",
+        name=label,
+        organization="lokale reputatie-analyse",
+        confidence=score,
+        evidence=reasons[:6] or ["Lokale analyse zonder extra reputatiesignalen"],
+        details=details,
+        raw={"phone_e164": phone_e164, "sources": sorted(sources)},
+    )
 
 
 def _to_orm_result(request_id: str, match: ProviderMatch) -> LookupResult:
@@ -330,51 +419,145 @@ def _to_orm_result(request_id: str, match: ProviderMatch) -> LookupResult:
     )
 
 
-def run_lookup_with_store(
+async def _run_provider_lookup(
+    provider,
+    phone_e164: str,
+    request_id: str,
+    *,
+    timeout_seconds: float,
+    semaphore: asyncio.Semaphore,
+) -> tuple[list[ProviderMatch], str | None]:
+    async with semaphore:
+        try:
+            matches = await asyncio.wait_for(
+                provider.lookup(phone_e164, context={"request_id": request_id}),
+                timeout=timeout_seconds,
+            )
+            return matches, None
+        except asyncio.TimeoutError:
+            return [], f"timeout>{timeout_seconds:.1f}s"
+        except Exception as exc:
+            return [], str(exc)
+
+
+async def run_lookup_with_store(
     db: Session,
     request: LookupRequest,
     *,
     force_refresh: bool = False,
+    route: str = "business",
 ) -> list[LookupResult]:
     phone_e164 = request.phone_e164
     all_matches: list[ProviderMatch] = []
-    providers = get_providers()
+    request.error = None
+    route = (route or "business").lower()
+    providers = get_providers(route)
+    concurrency = max(1, settings.LOOKUP_PROVIDER_CONCURRENCY)
+    provider_timeout = max(1.0, settings.LOOKUP_PROVIDER_TIMEOUT_SECONDS)
+    total_timeout = max(provider_timeout, settings.LOOKUP_TOTAL_TIMEOUT_SECONDS)
+    semaphore = asyncio.Semaphore(concurrency)
+
+    cached_payloads: dict[str, list[dict] | None] = {}
+    provider_started_at: dict[str, float] = {}
+    pending_tasks: dict[asyncio.Task, tuple] = {}
 
     for provider in providers:
-        cached = None if force_refresh else get_cached_payload(db, phone_e164, provider.name)
-        start = perf_counter()
-        provider_matches: list[ProviderMatch] = []
-        provider_error: str | None = None
-        hit = False
-        try:
-            if cached is not None:
-                provider_matches = provider.from_cache_payload(cached)
-            else:
-                provider_matches = await provider.lookup(phone_e164, context={"request_id": request.id})
-                set_cached_payload(db, phone_e164, provider.name, provider.to_cache_payload(provider_matches))
+        cached_payloads[provider.name] = None if force_refresh else get_cached_payload(db, phone_e164, provider.name)
+
+    for provider in providers:
+        cached = cached_payloads.get(provider.name)
+        if cached is not None:
+            provider_matches = provider.from_cache_payload(cached)
             hit = bool(provider_matches)
             for match in provider_matches:
                 _enrich_match_identity(match)
                 match.confidence = score_match(match, phone_e164)
                 all_matches.append(match)
-        except Exception as exc:
-            provider_error = str(exc)
+            db.add(
+                SourceRuntimeMetric(
+                    id=str(uuid.uuid4()),
+                    request_id=request.id,
+                    source=provider.name,
+                    duration_ms=0.0,
+                    result_count=len(provider_matches),
+                    hit_count=1 if hit else 0,
+                    error=None,
+                )
+            )
+            continue
 
-        elapsed_ms = round((perf_counter() - start) * 1000, 2)
+        provider_started_at[provider.name] = perf_counter()
+        task = asyncio.create_task(
+            _run_provider_lookup(
+                provider,
+                phone_e164,
+                request.id,
+                timeout_seconds=provider_timeout,
+                semaphore=semaphore,
+            )
+        )
+        pending_tasks[task] = (provider, provider_started_at[provider.name])
+
+    lookup_started = perf_counter()
+    while pending_tasks and (perf_counter() - lookup_started) < total_timeout:
+        remaining = total_timeout - (perf_counter() - lookup_started)
+        done, _ = await asyncio.wait(
+            pending_tasks.keys(),
+            timeout=remaining,
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if not done:
+            break
+
+        for task in done:
+            provider, started_at = pending_tasks.pop(task)
+            provider_matches: list[ProviderMatch] = []
+            provider_error: str | None = None
+            try:
+                provider_matches, provider_error = await task
+                if provider_error is None:
+                    set_cached_payload(db, phone_e164, provider.name, provider.to_cache_payload(provider_matches))
+                    for match in provider_matches:
+                        _enrich_match_identity(match)
+                        match.confidence = score_match(match, phone_e164)
+                        all_matches.append(match)
+            except Exception as exc:
+                provider_error = str(exc)
+
+            elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
+            db.add(
+                SourceRuntimeMetric(
+                    id=str(uuid.uuid4()),
+                    request_id=request.id,
+                    source=provider.name,
+                    duration_ms=elapsed_ms,
+                    result_count=len(provider_matches),
+                    hit_count=1 if provider_matches else 0,
+                    error=provider_error,
+                )
+            )
+
+    for task, (provider, started_at) in list(pending_tasks.items()):
+        task.cancel()
+        elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
         db.add(
             SourceRuntimeMetric(
                 id=str(uuid.uuid4()),
                 request_id=request.id,
                 source=provider.name,
                 duration_ms=elapsed_ms,
-                result_count=len(provider_matches),
-                hit_count=1 if hit else 0,
-                error=provider_error,
+                result_count=0,
+                hit_count=0,
+                error=f"global-timeout>{total_timeout:.1f}s",
             )
         )
+    if pending_tasks:
+        await asyncio.gather(*pending_tasks.keys(), return_exceptions=True)
 
     deduped = _dedupe_matches(all_matches)
     aggregated = _aggregate_multisource(deduped)
+    if route == "spam":
+        aggregated = [_build_reputation_summary(phone_e164, deduped)] + aggregated[:4]
     aggregated_sorted = sorted(aggregated, key=lambda match: match.confidence, reverse=True)
 
     results = [_to_orm_result(request.id, match) for match in aggregated_sorted]
@@ -398,9 +581,16 @@ def create_lookup_request(
     phone_raw: str,
     *,
     force_refresh: bool = False,
+    mode: str = "business",
 ) -> tuple[LookupRequest, bool, str]:
     phone_e164 = normalize_phone(phone_raw)
-    request = db.query(LookupRequest).filter_by(phone_e164=phone_e164).order_by(LookupRequest.created_at.desc()).first()
+    mode = (mode or "business").lower()
+    request = (
+        db.query(LookupRequest)
+        .filter_by(phone_e164=phone_e164, mode=mode)
+        .order_by(LookupRequest.created_at.desc())
+        .first()
+    )
     if request and request.status == "done" and not force_refresh:
         created_new = False
     else:
@@ -408,6 +598,7 @@ def create_lookup_request(
             id=str(uuid.uuid4()),
             phone_raw=phone_raw.strip(),
             phone_e164=phone_e164,
+            mode=mode,
             status="running",
         )
         db.add(request)
