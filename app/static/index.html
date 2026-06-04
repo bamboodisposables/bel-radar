@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="canonical" href="https://bel-radar-official.onrender.com/" />
     <title>Bel Radar</title>
     <script>
       const assetBase = window.location.protocol === "file:" ? "." : "/static";
@@ -10,69 +11,94 @@
     </script>
   </head>
   <body>
-    <main class="page-shell">
+    <main class="app-shell">
       <header class="topbar">
         <div class="brand">
           <span class="brand-mark"></span>
           <div>
-            <p class="brand-kicker">Nummerherkomst opzoeken</p>
+            <p class="brand-kicker">Openbare en eigen nummeranalyse</p>
             <h1>Bel Radar</h1>
           </div>
         </div>
         <nav class="topnav">
-          <a href="#lookup">Zoeken</a>
-          <a href="#results">Resultaten</a>
-          <a href="#bulk">Bulk</a>
+          <a href="#lookup">Lookup</a>
+          <a href="#signals">Signalen</a>
+          <a href="#dashboard">Dashboard</a>
+          <a href="https://bel-radar-official.onrender.com/" rel="noopener" target="_blank">Live</a>
         </nav>
       </header>
 
       <section class="hero" id="lookup">
-        <div class="hero-inner">
-          <p class="hero-mini">Nummer terugzoeken</p>
-          <h2>Van wie is dit nummer?</h2>
-          <p class="hero-copy">
-            Doorzoek publieke profielen, gebruikersnamen, bedrijfsvermeldingen en
-            platformsignalen die aan een telefoonnummer zijn gekoppeld.
+        <div class="hero-copy">
+          <p class="hero-mini">Vier operationele routes</p>
+          <h2>Radar, signalering en controle in één cockpit.</h2>
+          <p class="hero-text">
+            Breng elk nummer door de juiste bronlaag: officiële bedrijfsbronnen,
+            reputatiesignalen, lokaal toestemmingslogboek en technische bronmonitoring.
           </p>
-
-          <form id="singleForm" class="hero-search" autocomplete="off">
-            <input id="singlePhone" placeholder="bijv. 06 12 34 56 78" required />
-            <button type="submit" aria-label="Zoeken">Zoeken</button>
-          </form>
-          <div class="hero-options">
-            <label class="toggle">
-              <input type="checkbox" id="singleRefresh" checked />
-              Vers zoeken (ververs bronnen)
-            </label>
-            <label class="toggle">
-              <input type="checkbox" id="singleHideUntrusted" />
-              Alleen officiële/openbare bronnen tonen
-            </label>
-          </div>
-
           <div class="hero-meta">
             <span class="hero-chip" id="globalStatus" data-tone="idle">Systeem klaar</span>
-            <span class="hero-chip">13 live bronnen</span>
-            <span class="hero-chip">Cache actief</span>
+            <span class="hero-chip" id="sourceCountChip">13 bronlagen</span>
+            <span class="hero-chip" id="localCountChip">0 eigen records</span>
           </div>
-
           <div class="runtime-hint" id="runtimeHint"></div>
+        </div>
+
+        <div class="route-grid" id="routeCards">
+          <button type="button" class="route-card active" data-route="business">
+            <span class="route-tag">Route 1</span>
+            <strong>Zakelijke bronverificatie</strong>
+            <p>Officiële en openbare bedrijfsverwijzingen met bronstack, timestamp en betrouwbaarheid.</p>
+          </button>
+          <button type="button" class="route-card" data-route="spam">
+            <span class="route-tag">Route 2</span>
+            <strong>Spamcontrole</strong>
+            <p>Publieke signalen plus lokale meldingen samengevoegd tot één risicoprofiel.</p>
+          </button>
+          <button type="button" class="route-card" data-route="consent">
+            <span class="route-tag">Route 3</span>
+            <strong>Toestemmingslogboek</strong>
+            <p>Zoek alleen in je eigen contacten en beheer het register met export en import.</p>
+          </button>
+          <button type="button" class="route-card" data-route="dashboard">
+            <span class="route-tag">Route 4</span>
+            <strong>Dashboard</strong>
+            <p>Brongezondheid, latency en conflictratio in een compacte technische cockpit.</p>
+          </button>
         </div>
       </section>
 
-      <section class="strap">
-        <p>Verrassend onbekende bellers? Vind direct het publieke spoor en controleer de herkomst.</p>
-      </section>
-
-      <section class="content-grid">
-        <article class="panel panel-main" id="results">
+      <section class="workspace">
+        <article class="panel main-panel">
           <div class="panel-head">
             <div>
-              <p class="panel-kicker">Direct zoeken</p>
-              <h3>Resultaatoverzicht</h3>
+              <p class="panel-kicker" id="panelKicker">Zakelijke lookup</p>
+              <h3 id="panelTitle">Vind een bedrijfsnaam of organisatie</h3>
             </div>
-            <button type="button" class="ghost-button" id="singleClear">Wissen</button>
+            <span class="panel-badge" id="panelBadge">business</span>
           </div>
+
+          <p class="panel-lead" id="panelLead">
+            Gebruik officiële handelsregisters en openbare bedrijfsbronnen.
+          </p>
+
+          <form id="singleForm" class="search-form" autocomplete="off">
+            <input id="singlePhone" placeholder="bijv. +31625265551" required />
+            <button type="submit" id="singleSubmit">Zoek zakelijk</button>
+          </form>
+
+          <div class="control-row" id="singleOptions">
+            <label class="toggle" id="refreshToggleWrap">
+              <input type="checkbox" id="singleRefresh" checked />
+              Vers zoeken
+            </label>
+            <label class="toggle" id="publicOnlyWrap">
+              <input type="checkbox" id="singleHideUntrusted" />
+              Alleen officiële/openbare bronnen
+            </label>
+          </div>
+
+          <div class="route-hint" id="routeHint"></div>
 
           <div id="singleResult" class="summary-box muted-empty">
             Systeem klaar
@@ -88,25 +114,72 @@
           <div id="singleResultLayer" class="result-layer muted-empty">
             <span class="empty-label">Geen resultaten weergegeven.</span>
           </div>
-        </article>
 
-        <aside class="side-stack" id="bulk">
-          <article class="panel">
-            <div class="panel-head">
+          <section class="route-extra" id="spamPanel" hidden>
+            <div class="panel-head compact">
               <div>
-              <p class="panel-kicker">Meerdere nummers</p>
-              <h3>Bulk scan</h3>
+                <p class="panel-kicker">Spamcontrole</p>
+                <h3>Lokale notities</h3>
               </div>
             </div>
+            <form id="spamForm" class="stack-form">
+              <input id="spamLabel" placeholder="label, bijvoorbeeld telemarketing" />
+              <textarea id="spamReason" rows="3" placeholder="Reden of observatie"></textarea>
+              <button type="submit" class="action-button">Opslaan als lokale spamnotitie</button>
+            </form>
+            <div id="spamReports" class="mini-list"></div>
+          </section>
 
+        <section class="route-extra" id="consentPanel" hidden>
+            <div class="panel-head compact">
+              <div>
+                <p class="panel-kicker">Toestemmingslogboek</p>
+                <h3>Eigen contacten</h3>
+              </div>
+            </div>
+            <form id="consentForm" class="stack-form consent-grid">
+              <input id="contactName" placeholder="Naam of label" />
+              <input id="contactPhone" placeholder="Telefoonnummer" />
+              <input id="contactCompany" placeholder="Bedrijf of afdeling" />
+              <textarea id="contactNote" rows="3" placeholder="Toelichting of toestemming"></textarea>
+              <button type="submit" class="action-button">Opslaan in eigen register</button>
+            </form>
+            <div class="consent-toolbar">
+              <button type="button" class="ghost-button" id="exportContacts">Exporteren</button>
+              <button type="button" class="action-button" id="importContacts">Importeren</button>
+              <button type="button" class="ghost-button danger" id="clearContacts">Logboek wissen</button>
+              <input type="file" id="importContactsFile" accept=".json,.csv,text/csv,.txt" hidden />
+            </div>
+            <p id="consentStatus" class="info-line" role="status" aria-live="polite"></p>
+            <div id="consentResults" class="mini-list"></div>
+          </section>
+
+          <section class="route-extra" id="dashboardPanel" hidden>
+            <div class="panel-head compact">
+              <div>
+                <p class="panel-kicker">Dashboard</p>
+                <h3>Brongezondheid en scans</h3>
+              </div>
+              <button type="button" class="ghost-button" id="refreshDashboard">Ververs</button>
+            </div>
+            <div class="kpi-grid" id="dashboardKpis"></div>
+            <div class="source-health" id="dashboardSources"></div>
+          </section>
+
+          <section class="route-extra" id="bulkPanel">
+            <div class="panel-head compact">
+              <div>
+                <p class="panel-kicker">Bulk scan</p>
+                <h3>Meerdere nummers</h3>
+              </div>
+            </div>
             <form id="bulkForm" class="stack-form">
-              <textarea id="bulkPhones" rows="8" placeholder="06 12 34 56 78&#10;0031 6 11 22 33 44"></textarea>
+              <textarea id="bulkPhones" rows="7" placeholder="06 12 34 56 78&#10;0031 6 11 22 33 44"></textarea>
               <div class="bulk-actions">
                 <label class="toggle"><input type="checkbox" id="bulkAsync" checked /> Asynchroon</label>
-                <button type="submit">Start batchscan</button>
+                <button type="submit" class="action-button">Start batchscan</button>
               </div>
             </form>
-
             <div id="bulkResult" class="summary-box muted-empty">Nog geen batch actief.</div>
             <div class="progress-wrap">
               <div class="progress-track">
@@ -115,27 +188,38 @@
               <p id="bulkProgressText">0 / 0 voltooide regels</p>
             </div>
             <div id="jobStatus" class="summary-box muted-empty">Geen actieve taak.</div>
-          </article>
+          </section>
+        </article>
 
-          <article class="panel info-panel">
-            <p class="panel-kicker">Actieve bronnen</p>
-            <h3>Bronoverzicht</h3>
+        <aside class="side-column">
+          <section class="panel signal-panel">
+            <p class="panel-kicker">Bronlagen</p>
+            <h3>Actieve bronnen</h3>
             <ul class="source-list">
-              <li><span>KVK API</span><strong>officieel handelsregister</strong></li>
-              <li><span>KVK Publiek</span><strong>officieel handelsregister</strong></li>
-              <li><span>DuckDuckGo</span><strong>openbare zoekbron (exact+breed)</strong></li>
-              <li><span>SerpAPI</span><strong>webzoek-API</strong></li>
-              <li><span>Twilio Lookup</span><strong>optionele premium API</strong></li>
-              <li><span>Numlookup</span><strong>optionele premium API</strong></li>
-              <li><span>Clearbit</span><strong>optionele premium API</strong></li>
-              <li><span>Hunter</span><strong>optionele premium API</strong></li>
-              <li><span>Numverify</span><strong>telecommetadata</strong></li>
-              <li><span>Phonenumbers</span><strong>nummermetadata</strong></li>
-              <li><span>Nederlandse directories</span><strong>telefoonnummer en bedrijven in NL</strong></li>
-              <li><span>Directory & Bedrijfsdata</span><strong>telefoon- en bedrijfsdirectories</strong></li>
-              <li><span>Social hints</span><strong>social media landing pages (indicatief)</strong></li>
+              <li><span>KVK API</span><strong>officieel</strong></li>
+              <li><span>KVK publiek</span><strong>officieel</strong></li>
+              <li><span>Nederlandse directories</span><strong>openbaar</strong></li>
+              <li><span>Directory & Bedrijfsdata</span><strong>openbaar</strong></li>
+              <li><span>DuckDuckGo</span><strong>openbaar</strong></li>
+              <li><span>Social hints</span><strong>indicatief</strong></li>
+              <li><span>Telefoonmetadata</span><strong>officieel</strong></li>
+              <li><span>Numverify</span><strong>officieel</strong></li>
+              <li><span>Twilio / Numlookup</span><strong>premium</strong></li>
+              <li><span>Clearbit / Hunter</span><strong>premium</strong></li>
             </ul>
-          </article>
+          </section>
+
+          <section class="panel signal-panel">
+            <p class="panel-kicker">Lokale status</p>
+            <h3>Eigen data</h3>
+            <div class="mini-stats" id="localStats"></div>
+          </section>
+
+          <section class="panel signal-panel">
+            <p class="panel-kicker">Controle</p>
+            <h3>Uitleg per route</h3>
+            <div class="route-summary" id="routeSummaryText"></div>
+          </section>
         </aside>
       </section>
     </main>
