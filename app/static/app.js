@@ -56,35 +56,39 @@ const LIVE_API_BASE = "https://bel-radar-official.onrender.com";
 const isFileProtocol = window.location.protocol === "file:";
 const queryParams = new URLSearchParams(window.location.search);
 const skipFileRedirect = queryParams.get("belradar_local") === "1" || queryParams.get("skip_redirect") === "1";
+const skipLocalRedirect = queryParams.get("belradar_local") === "1";
 const shouldRedirectFromFile = isFileProtocol && !skipFileRedirect;
 const apiEnabled = !isFileProtocol;
 const currentHost = window.location.host || "";
 const isLocalhost = currentHost.includes("localhost") || currentHost.includes("127.0.0.1");
+const shouldRedirectFromLocalhost = isLocalhost && !skipLocalRedirect && !window.__BELRADAR_API_BASE;
 const apiBase = apiEnabled
   ? window.__BELRADAR_API_BASE || (isLocalhost ? LIVE_API_BASE : window.location.origin)
   : window.__BELRADAR_API_BASE || LIVE_API_BASE;
 const liveApiHost = apiEnabled ? window.location.host : LIVE_API_BASE.replace(/^https?:\\/\\//, "");
 
-function showFileBootstrapRedirect() {
-  if (!shouldRedirectFromFile) {
+function showEnvironmentBootstrapRedirect() {
+  if (!shouldRedirectFromFile && !shouldRedirectFromLocalhost) {
     return;
   }
 
   if (!document.body) {
-    document.addEventListener("DOMContentLoaded", showFileBootstrapRedirect, { once: true });
+    document.addEventListener("DOMContentLoaded", showEnvironmentBootstrapRedirect, { once: true });
     return;
   }
 
   const redirectDelayMs = 1800;
-  const targetUrl = `${LIVE_API_BASE}/?from=file_redirect`;
+  const isLocalHostRedirect = !isFileProtocol && shouldRedirectFromLocalhost;
+  const targetUrl = `${LIVE_API_BASE}/?from=${isLocalHostRedirect ? "localhost_redirect" : "file_redirect"}`;
+  const contextLabel = isLocalHostRedirect ? "Lokale ontwikkelmodus (localhost)" : "Lokale bestandmodus (file://)";
   const overlay = document.createElement("div");
   overlay.className = "file-mode-boot-overlay";
   overlay.innerHTML = `
     <section class="file-mode-boot-card" role="status" aria-live="polite">
-      <p class="file-mode-boot-kicker">Lokale bestandmodus gedetecteerd</p>
+      <p class="file-mode-boot-kicker">${contextLabel} gedetecteerd</p>
       <h3>Herrouteer naar Bel Radar live</h3>
       <p>
-        Je draait nu een <strong>file://</strong> versie. Om actuele bronresultaten te tonen, starten we automatisch door naar
+        Je draait nu een lokale versie. Om actuele bronresultaten te tonen, starten we automatisch door naar
         <strong>${LIVE_API_BASE}</strong>.
       </p>
       <p class="file-mode-countdown">
@@ -117,7 +121,7 @@ function showFileBootstrapRedirect() {
   }, redirectDelayMs);
 }
 
-showFileBootstrapRedirect();
+showEnvironmentBootstrapRedirect();
 const STORAGE_KEYS = {
   contacts: "belradar.contacts.v2",
   spam: "belradar.spam.v2",
@@ -941,43 +945,65 @@ async function runSingleLookup(phoneNumber) {
   renderSummary(`Zoekopdracht gestart...\nRoute: ${translateRouteLabel(activeRoute)}`, singleResult);
   renderEmptyResults("Resultaten worden geladen...");
 
-  const response = await fetch(`${apiBase}/api/v1/lookup`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      phone_number: phoneNumber,
-      force_refresh: refreshToggle ? refreshToggle.checked : false,
-      mode: activeRoute,
-    }),
-  });
-  const payload = await response.json();
+  const timeoutMs = 25000;
+  const controller = new AbortController();
+  const timeoutHandle = window.setTimeout(() => controller.abort(), timeoutMs);
 
-  if (!response.ok) {
-    setStatus("Zoekopdracht mislukt", "err");
-    renderSummary(`Fout: ${payload.detail || "onbekend"}`, singleResult);
-    renderEmptyResults("De zoekopdracht kon niet worden voltooid.");
+  try {
+    const response = await fetch(`${apiBase}/api/v1/lookup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        phone_number: phoneNumber,
+        force_refresh: refreshToggle ? refreshToggle.checked : false,
+        mode: activeRoute,
+      }),
+      signal: controller.signal,
+    });
+    const payload = await response.json();
+    clearTimeout(timeoutHandle);
+
+    if (!response.ok) {
+      setStatus("Zoekopdracht mislukt", "err");
+      renderSummary(`Fout: ${payload.detail || "onbekend"}`, singleResult);
+      renderEmptyResults("De zoekopdracht kon niet worden voltooid.");
+      return;
+    }
+
+    renderSummary(
+      [
+        `Status: ${translateStatus(payload.status)}`,
+        `Route: ${translateRouteLabel(payload.mode || activeRoute)}`,
+        `Zoek-ID: ${payload.request_id}`,
+        `Internationaal formaat: ${payload.phone_e164}`,
+        `Gevonden resultaten: ${payload.results.length}`,
+      ].join("\n"),
+      singleResult,
+    );
+
+    if ((payload.mode || activeRoute) === "spam") {
+      renderSpamResults(payload.results || [], `laatste scan · ${payload.phone_e164}`);
+    } else {
+      renderBusinessResults(payload.results || [], `laatste scan · ${payload.phone_e164}`);
+    }
+
+    setStatus("Scan klaar", "ok");
+    updateLocalStats();
+    return;
+  } catch (error) {
+    clearTimeout(timeoutHandle);
+    const isTimeout = error.name === "AbortError";
+    setStatus(isTimeout ? "Timeout" : "Netwerkfout", isTimeout ? "warn" : "err");
+    renderSummary(isTimeout ? "Geen antwoord van de live API binnen 25s." : "Netwerkfout bij het uitvoeren van de zoekopdracht.", singleResult);
+    renderEmptyResults("Probeerde te zoeken maar kreeg geen respons van de API.");
+    if (!isTimeout && error?.message) {
+      singleResultLayer?.insertAdjacentHTML(
+        "beforeend",
+        `<div class=\"mini-card\"><strong>Details</strong><span>${escapeHtml(error.message)}</span></div>`,
+      );
+    }
     return;
   }
-
-  renderSummary(
-    [
-      `Status: ${translateStatus(payload.status)}`,
-      `Route: ${translateRouteLabel(payload.mode || activeRoute)}`,
-      `Zoek-ID: ${payload.request_id}`,
-      `Internationaal formaat: ${payload.phone_e164}`,
-      `Gevonden resultaten: ${payload.results.length}`,
-    ].join("\n"),
-    singleResult,
-  );
-
-  if ((payload.mode || activeRoute) === "spam") {
-    renderSpamResults(payload.results || [], `laatste scan · ${payload.phone_e164}`);
-  } else {
-    renderBusinessResults(payload.results || [], `laatste scan · ${payload.phone_e164}`);
-  }
-
-  setStatus("Scan klaar", "ok");
-  updateLocalStats();
 }
 
 function resetBulkState() {
